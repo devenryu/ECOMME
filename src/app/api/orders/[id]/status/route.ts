@@ -3,22 +3,17 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-interface OrderWithProduct {
-  products: {
-    seller_id: string;
-  };
-}
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
-
-    // Get the current user's session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    
+    // Get authenticated user - recommended by Supabase for security
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -29,6 +24,7 @@ export async function PUT(
     const body = await request.json();
     const { status } = body;
 
+    // Validate status value
     if (!['pending', 'processing', 'shipped', 'delivered', 'cancelled'].includes(status)) {
       return NextResponse.json(
         { error: 'Invalid status' },
@@ -36,44 +32,84 @@ export async function PUT(
       );
     }
 
-    // Get the order and verify ownership
-    const { data: order, error: orderError } = await supabase
+    // First, check if the order exists and get product_id
+    const { data: orderData, error: orderError } = await supabase
       .from('orders')
-      .select('products (seller_id)')
+      .select('id, product_id')
       .eq('id', params.id)
-      .single<OrderWithProduct>();
+      .limit(1);
+      
+    if (orderError) {
+      console.error('Error fetching order:', orderError);
+      return NextResponse.json(
+        { error: 'Error fetching order', details: orderError.message },
+        { status: 500 }
+      );
+    }
 
-    if (orderError || !order) {
+    // Check if order exists
+    if (!orderData || orderData.length === 0) {
       return NextResponse.json(
         { error: 'Order not found' },
         { status: 404 }
       );
     }
 
-    if (order.products.seller_id !== session.user.id) {
+    // Verify seller is authorized to update this order
+    const { data: productData, error: productError } = await supabase
+      .from('products')
+      .select('seller_id')
+      .eq('id', orderData[0].product_id)
+      .eq('seller_id', user.id)
+      .limit(1);
+      
+    if (productError) {
+      console.error('Error fetching product:', productError);
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Error verifying product ownership', details: productError.message },
+        { status: 500 }
+      );
+    }
+    
+    // Check if product exists and is owned by this user
+    if (!productData || productData.length === 0) {
+      return NextResponse.json(
+        { error: 'You are not authorized to update this order' },
         { status: 403 }
       );
     }
+    
+    console.log(`Updating order ${params.id} status to ${status}`);
 
-    // Update order status
-    const { data: updatedOrder, error } = await supabase
+    // Update order status - the RLS policy will handle authorization
+    const { error: updateError } = await supabase
       .from('orders')
-      .update({ status })
-      .eq('id', params.id)
-      .select()
-      .single();
+      .update({ 
+        status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', params.id);
 
-    if (error) {
-      throw error;
+    if (updateError) {
+      console.error('Error updating order status:', updateError);
+      return NextResponse.json(
+        { error: 'Failed to update order status', details: updateError.message },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json(updatedOrder);
+    console.log(`Successfully updated order ${params.id} status to ${status}`);
+    
+    return NextResponse.json({
+      message: 'Order status updated successfully',
+      orderId: params.id,
+      status: status
+    });
   } catch (error) {
     console.error('Orders API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Internal Server Error', details: errorMessage },
       { status: 500 }
     );
   }
