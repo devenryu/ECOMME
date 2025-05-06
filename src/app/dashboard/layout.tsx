@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Package, ShoppingCart, LogOut } from "lucide-react";
+import { Package, ShoppingCart, LogOut, LayoutDashboard } from "lucide-react";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 
 async function getUser() {
   const supabase = createServerComponentClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
 
 export default async function DashboardLayout({
@@ -39,6 +39,13 @@ export default async function DashboardLayout({
         </div>
         <nav className="mt-6">
           <div className="px-4 space-y-2">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            >
+              <LayoutDashboard className="h-5 w-5" />
+              Overview
+            </Link>
             <Link
               href="/dashboard/products"
               className="flex items-center gap-2 px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
