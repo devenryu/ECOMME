@@ -167,8 +167,8 @@ export async function DELETE(
     const supabase = createRouteHandlerClient({ cookies });
 
     // Get the current user's session
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       console.log(`[API] Unauthorized delete attempt for product ${params.id}`);
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -177,12 +177,12 @@ export async function DELETE(
     }
 
     // First, check if the product exists and belongs to the user
-    console.log(`[API] Checking if product ${params.id} exists and belongs to user ${session.user.id}`);
+    console.log(`[API] Checking if product ${params.id} exists and belongs to user ${user.id}`);
     const { data: existingProduct, error: fetchError } = await supabase
       .from('products')
       .select('*')
       .eq('id', params.id)
-      .eq('seller_id', session.user.id)
+      .eq('seller_id', user.id)
       .single();
 
     if (fetchError) {
@@ -194,19 +194,65 @@ export async function DELETE(
     }
 
     if (!existingProduct) {
-      console.log(`[API] Product ${params.id} not found or does not belong to user ${session.user.id}`);
+      console.log(`[API] Product ${params.id} not found or does not belong to user ${user.id}`);
       return NextResponse.json(
         { error: 'Product not found or unauthorized' },
         { status: 404 }
       );
     }
 
-    // Delete the product
+    // Check if the product has any orders
+    console.log(`[API] Checking if product ${params.id} has any orders`);
+    const { count: ordersCount, error: countError } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .eq('product_id', params.id);
+    
+    if (countError) {
+      console.error(`[API] Error checking for orders on product ${params.id}:`, countError);
+      return NextResponse.json(
+        { error: 'Failed to check if product has orders', details: countError.message },
+        { status: 500 }
+      );
+    }
+    
+    // If product has orders, archive it (soft delete) instead of hard delete
+    if (ordersCount && ordersCount > 0) {
+      console.log(`[API] Product ${params.id} has ${ordersCount} orders, performing soft delete (archive)`);
+      
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          is_deleted: true,
+          status: 'inactive',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.id)
+        .eq('seller_id', user.id);
+      
+      if (updateError) {
+        console.error(`[API] Error archiving product ${params.id}:`, updateError);
+        return NextResponse.json(
+          { error: 'Failed to archive product', details: updateError.message },
+          { status: 500 }
+        );
+      }
+      
+      console.log(`[API] Product ${params.id} archived successfully`);
+      return NextResponse.json({
+        message: 'Product archived successfully due to existing orders',
+        archived: true,
+        deleted: false
+      });
+    }
+    
+    // No orders associated, perform hard delete
+    console.log(`[API] Product ${params.id} has no orders, performing hard delete`);
     const { error } = await supabase
       .from('products')
       .delete()
       .eq('id', params.id)
-      .eq('seller_id', session.user.id);
+      .eq('seller_id', user.id);
 
     if (error) {
       console.error(`[API] Error deleting product ${params.id}:`, error);
@@ -217,10 +263,11 @@ export async function DELETE(
     }
 
     console.log(`[API] Product ${params.id} deleted successfully`);
-    return NextResponse.json(
-      { message: 'Product deleted successfully' },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      message: 'Product deleted successfully',
+      archived: false,
+      deleted: true
+    });
   } catch (error) {
     console.error(`[API] Unexpected error deleting product ${params.id}:`, error);
     return NextResponse.json(

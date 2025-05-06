@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, ExternalLink, Pencil, Trash2 } from 'lucide-react';
+import { Plus, ExternalLink, Pencil, Trash2, Archive, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -40,6 +40,7 @@ interface Product {
   features: string[];
   slug: string;
   created_at: string;
+  is_deleted?: boolean;
 }
 
 interface ProductsTableProps {
@@ -48,11 +49,18 @@ interface ProductsTableProps {
 
 export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [showArchived, setShowArchived] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const router = useRouter();
+
+  // Filter products based on archived status
+  const filteredProducts = products.filter(product => 
+    showArchived ? product.is_deleted : !product.is_deleted
+  );
 
   // Completely replace the initial products with fetched ones on load
   const fetchProducts = async () => {
@@ -101,10 +109,23 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
         throw new Error(errorData.message || 'Failed to delete product');
       }
       
-      // Optimistically remove from UI first
-      setProducts(currentProducts => 
-        currentProducts.filter(p => p.id !== productId)
-      );
+      const result = await response.json();
+      
+      if (result.archived) {
+        // Product was archived instead of deleted due to orders
+        // Update the product in the list instead of removing it
+        setProducts(currentProducts => 
+          currentProducts.map(p => p.id === productId ? { ...p, is_deleted: true } : p)
+        );
+        
+        // Show a notification or message about archiving instead of deleting
+        setError(`"${products.find(p => p.id === productId)?.title}" was archived instead of deleted because it has orders.`);
+      } else {
+        // Product was fully deleted, remove from UI
+        setProducts(currentProducts => 
+          currentProducts.filter(p => p.id !== productId)
+        );
+      }
       
       // Wait a short time to ensure the delete has propagated
       setTimeout(async () => {
@@ -120,7 +141,49 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while deleting the product');
+    } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleToggleArchive = async (productId: string, currentState: boolean) => {
+    if (!productId) return;
+    
+    try {
+      setIsArchiving(true);
+      const action = currentState ? 'unarchive' : 'archive';
+      
+      const response = await fetch('/api/products/archive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: JSON.stringify({
+          productId,
+          action
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to ${action} product`);
+      }
+      
+      // Optimistically update the UI
+      setProducts(currentProducts => 
+        currentProducts.map(p => p.id === productId ? { ...p, is_deleted: !currentState } : p)
+      );
+      
+      // Fetch fresh data after a short delay
+      setTimeout(() => {
+        fetchProducts();
+      }, 500);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -134,6 +197,12 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            {showArchived ? 'Show Active' : 'Show Archived'}
+          </Button>
           <Button onClick={fetchProducts} variant="outline">
             Refresh
           </Button>
@@ -152,10 +221,10 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={fetchProducts}
+            onClick={() => setError(null)}
             className="ml-2"
           >
-            Retry
+            Dismiss
           </Button>
         </div>
       )}
@@ -179,18 +248,34 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
                   Loading products...
                 </TableCell>
               </TableRow>
-            ) : products?.length > 0 ? (
-              products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell className="font-medium">{product.title}</TableCell>
+            ) : filteredProducts?.length > 0 ? (
+              filteredProducts.map((product) => (
+                <TableRow 
+                  key={product.id}
+                  className={cn(
+                    product.is_deleted && "bg-gray-50 opacity-70"
+                  )}
+                >
+                  <TableCell className="font-medium">
+                    {product.title}
+                    {product.is_deleted && (
+                      <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded text-gray-600">
+                        Archived
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {formatCurrency(product.price, product.currency)}
                   </TableCell>
                   <TableCell>
-                    <StatusToggle
-                      product={product}
-                      initialStatus={product.status}
-                    />
+                    {product.is_deleted ? (
+                      <span className="text-gray-500">Inactive</span>
+                    ) : (
+                      <StatusToggle
+                        product={product}
+                        initialStatus={product.status}
+                      />
+                    )}
                   </TableCell>
                   <TableCell>{product.template_type}</TableCell>
                   <TableCell>
@@ -198,65 +283,102 @@ export function ProductsTable({ initialProducts = [] }: ProductsTableProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        asChild
-                        title="View product page"
-                      >
-                        <Link href={`/p/${product.slug}`} target="_blank">
-                          <ExternalLink className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        asChild
-                        title="Edit product"
-                      >
-                        <Link href={`/dashboard/products/${product.id}`}>
-                          <Pencil className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                            title="Delete product"
-                            onClick={() => setDeleteProductId(product.id)}
+                      {!product.is_deleted && (
+                        <>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            asChild
+                            title="View product page"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Link href={`/p/${product.slug}`} target="_blank">
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete &quot;{product.title}&quot;? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="bg-red-500 hover:bg-red-600 text-white"
-                              disabled={isDeleting}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            asChild
+                            title="Edit product"
+                          >
+                            <Link href={`/dashboard/products/${product.id}`}>
+                              <Pencil className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </>
+                      )}
+                      
+                      {/* Archive/Unarchive button */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={product.is_deleted ? 
+                          "text-blue-500 hover:text-blue-700 hover:bg-blue-50" : 
+                          "text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                        }
+                        title={product.is_deleted ? "Unarchive product" : "Archive product"}
+                        onClick={() => handleToggleArchive(product.id, product.is_deleted || false)}
+                        disabled={isArchiving}
+                      >
+                        {product.is_deleted ? 
+                          <RefreshCw className="h-4 w-4" /> : 
+                          <Archive className="h-4 w-4" />
+                        }
+                      </Button>
+                      
+                      {/* Delete button - only show if not archived */}
+                      {!product.is_deleted && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              title="Delete product"
+                              onClick={() => setDeleteProductId(product.id)}
                             >
-                              {isDeleting ? 'Deleting...' : 'Delete'}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Product</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete &quot;{product.title}&quot;?
+                                {"\n"}
+                                If this product has orders, it will be archived instead of deleted.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteProduct(product.id)}
+                                className="bg-red-500 hover:bg-red-600 text-white"
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6">
-                  No products found. Create your first product to get started.
+                <TableCell colSpan={6} className="text-center py-8">
+                  {showArchived ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <Archive className="h-12 w-12 text-gray-300" />
+                      <p className="text-gray-500">No archived products found</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-gray-500">No products found. Click &quot;Add Product&quot; to create one.</p>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             )}

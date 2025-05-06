@@ -30,14 +30,22 @@ export async function GET(
     console.log(`[PUBLIC API] Attempting admin query for product with slug: ${params.slug}`);
     const { data: adminCheck, error: adminError } = await supabase
       .from('products')
-      .select('id, status, title')
+      .select('id, status, title, is_deleted')
       .eq('slug', params.slug)
       .single();
 
     if (adminError) {
       console.log(`[PUBLIC API] Admin query error for slug '${params.slug}':`, adminError);
     } else if (adminCheck) {
-      console.log(`[PUBLIC API] Product exists with status: ${adminCheck.status}, title: ${adminCheck.title}`);
+      console.log(`[PUBLIC API] Product exists with status: ${adminCheck.status}, title: ${adminCheck.title}, archived: ${adminCheck.is_deleted}`);
+      
+      // If product is archived, return product not available
+      if (adminCheck.is_deleted) {
+        return NextResponse.json(
+          { error: 'Product not available', message: 'This product is no longer available.' },
+          { status: 403 }
+        );
+      }
     } else {
       console.log(`[PUBLIC API] Product not found in admin check`);
     }
@@ -60,6 +68,7 @@ export async function GET(
       `)
       .eq('slug', params.slug)
       .eq('status', 'active')  // Explicitly filter for active products
+      .eq('is_deleted', false) // Ensure archived products aren't shown
       .single();
 
     if (error) {
@@ -67,12 +76,19 @@ export async function GET(
       
       // Check if it's a not found error
       if (error.code === 'PGRST116') {
-        // Check if product exists but is not active
-        if (adminCheck && adminCheck.status !== 'active') {
-          return NextResponse.json(
-            { error: 'Product not available', message: 'This product is not currently active.' },
-            { status: 403 }
-          );
+        // Check if product exists but is not active or is archived
+        if (adminCheck) {
+          if (adminCheck.is_deleted) {
+            return NextResponse.json(
+              { error: 'Product not available', message: 'This product is no longer available.' },
+              { status: 403 }
+            );
+          } else if (adminCheck.status !== 'active') {
+            return NextResponse.json(
+              { error: 'Product not available', message: 'This product is not currently active.' },
+              { status: 403 }
+            );
+          }
         }
         
         return NextResponse.json(
