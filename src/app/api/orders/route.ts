@@ -1,0 +1,97 @@
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { orderSchema } from '@/lib/validations/order';
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createRouteHandlerClient({ cookies });
+
+    // Get the current user's session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get('productId');
+
+    // Build query
+    let query = supabase
+      .from('orders')
+      .select(`
+        *,
+        products (
+          title,
+          price,
+          currency,
+          seller_id
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    // Add product filter if specified
+    if (productId) {
+      query = query.eq('product_id', productId);
+    }
+
+    // Only fetch orders for products owned by the current user
+    query = query.eq('products.seller_id', session.user.id);
+
+    const { data: orders, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({ orders });
+  } catch (error) {
+    console.error('Orders API Error:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = createRouteHandlerClient({ cookies });
+    const body = await request.json();
+
+    // Validate request body
+    const validatedData = orderSchema.parse(body);
+
+    // Create order in database
+    const { data: order, error } = await supabase
+      .from('orders')
+      .insert({
+        product_id: body.productId,
+        full_name: validatedData.fullName,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        shipping_address: validatedData.shippingAddress,
+        notes: validatedData.notes,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(order);
+  } catch (error) {
+    console.error('Orders API Error:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+} 
