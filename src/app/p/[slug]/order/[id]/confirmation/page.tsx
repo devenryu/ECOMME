@@ -3,7 +3,8 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface PageProps {
   params: {
@@ -83,9 +84,12 @@ export default async function OrderConfirmationPage({ params }: PageProps) {
               </dl>
             </div>
 
-            <Button asChild>
-              <Link href="/">Return Home</Link>
-            </Button>
+            <Link 
+              href="/" 
+              className={cn(buttonVariants({ variant: "default" }), "font-medium")}
+            >
+              Return Home
+            </Link>
           </div>
         </div>
       </div>

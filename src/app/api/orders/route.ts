@@ -67,7 +67,21 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validatedData = orderSchema.parse(body);
 
-    // Create order in database
+    // Get the current user's session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Get product details to calculate total amount
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id, price')
+      .eq('id', body.productId)
+      .single();
+
+    if (productError) {
+      throw productError;
+    }
+
+    // Create order in database with all required fields
     const { data: order, error } = await supabase
       .from('orders')
       .insert({
@@ -78,6 +92,8 @@ export async function POST(request: NextRequest) {
         shipping_address: validatedData.shippingAddress,
         notes: validatedData.notes,
         status: 'pending',
+        user_id: session?.user?.id ? session.user.id : '00000000-0000-0000-0000-000000000000', // Explicit check to avoid null/undefined
+        total_amount: product.price
       })
       .select()
       .single();
