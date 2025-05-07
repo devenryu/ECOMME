@@ -64,7 +64,13 @@ export async function GET(
         image_url,
         features,
         slug,
-        status
+        status,
+        images,
+        colors,
+        sizes,
+        quantity,
+        min_order_quantity,
+        max_order_quantity
       `)
       .eq('slug', params.slug)
       .eq('status', 'active')  // Explicitly filter for active products

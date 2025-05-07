@@ -1,7 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
 import { Check, Star, ArrowRight, ShoppingCart, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 
 interface PremiumTemplateProps {
   product: {
@@ -12,10 +16,47 @@ interface PremiumTemplateProps {
     image_url?: string;
     features: string[];
     slug: string;
+    quantity: number;
+    min_order_quantity: number;
+    max_order_quantity?: number | null;
   };
 }
 
 export function PremiumTemplate({ product }: PremiumTemplateProps) {
+  const [orderQuantity, setOrderQuantity] = useState<number>(product.min_order_quantity || 1);
+  const [productQuantity, setProductQuantity] = useState<number>(product.quantity || 0);
+
+  // Update product quantity and order quantity when product data changes
+  useEffect(() => {
+    setProductQuantity(product.quantity || 0);
+    setOrderQuantity(product.min_order_quantity || 1);
+  }, [product]);
+
+  const handleQuantityChange = (newQuantity: number) => {
+    // Ensure quantity is within bounds
+    const boundedQuantity = Math.max(
+      product.min_order_quantity || 1,
+      Math.min(
+        newQuantity,
+        product.max_order_quantity ?? Infinity,
+        productQuantity
+      )
+    );
+    setOrderQuantity(boundedQuantity);
+  };
+
+  const handleQuantityInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value);
+    if (!isNaN(value)) {
+      handleQuantityChange(value);
+    }
+  };
+
+  // Calculate if we can add more to cart
+  const canIncrease = orderQuantity < (product.max_order_quantity ?? productQuantity);
+  const canDecrease = orderQuantity > (product.min_order_quantity || 1);
+  const isOutOfStock = productQuantity <= 0;
+
   return (
     <div className="min-h-screen overflow-hidden">
       {/* Hero Section */}
@@ -51,20 +92,107 @@ export function PremiumTemplate({ product }: PremiumTemplateProps) {
             </p>
             
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-4">
-              <Link
-                href={`/p/${product.slug}/order`}
-                className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-base font-medium text-gray-900 transition-all hover:bg-gray-100 hover:shadow-glow-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 group"
-                tabIndex={0}
-                aria-label={`Buy ${product.title} now for ${formatCurrency(product.price, product.currency)}`}
-              >
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Buy Now
-                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
-              
-              <div className="text-2xl font-bold text-white flex items-center">
-                {formatCurrency(product.price, product.currency)}
+              {/* Quantity Selector */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center border border-white/20 rounded-lg bg-white/10 backdrop-blur-sm">
+                    <button 
+                      className={cn(
+                        "w-10 h-10 flex items-center justify-center text-lg border-r border-white/20 transition-colors",
+                        canDecrease && !isOutOfStock
+                          ? "hover:bg-white/10 text-white" 
+                          : "text-white/40 cursor-not-allowed"
+                      )}
+                      aria-label="Decrease quantity"
+                      onClick={() => canDecrease && !isOutOfStock && handleQuantityChange(orderQuantity - 1)}
+                      disabled={!canDecrease || isOutOfStock}
+                    >
+                      -
+                    </button>
+                    <input 
+                      type="number" 
+                      min={product.min_order_quantity || 1}
+                      max={product.max_order_quantity ?? productQuantity}
+                      value={orderQuantity}
+                      onChange={handleQuantityInput}
+                      disabled={isOutOfStock}
+                      className={cn(
+                        "w-12 h-10 text-center bg-transparent text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                        isOutOfStock && "opacity-50 cursor-not-allowed"
+                      )}
+                      aria-label="Quantity"
+                    />
+                    <button 
+                      className={cn(
+                        "w-10 h-10 flex items-center justify-center text-lg border-l border-white/20 transition-colors",
+                        canIncrease && !isOutOfStock
+                          ? "hover:bg-white/10 text-white" 
+                          : "text-white/40 cursor-not-allowed"
+                      )}
+                      aria-label="Increase quantity"
+                      onClick={() => canIncrease && !isOutOfStock && handleQuantityChange(orderQuantity + 1)}
+                      disabled={!canIncrease || isOutOfStock}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="text-2xl font-bold text-white flex items-center">
+                    {formatCurrency(product.price * orderQuantity, product.currency)}
+                    {orderQuantity > 1 && (
+                      <span className="text-sm font-normal text-gray-300 ml-2">
+                        ({formatCurrency(product.price, product.currency)} each)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isOutOfStock && (
+                  <span className="text-sm text-amber-400 font-medium">
+                    Out of stock
+                  </span>
+                )}
+                {!isOutOfStock && productQuantity < 10 && (
+                  <span className="text-sm text-amber-400">
+                    Only {productQuantity} left in stock
+                  </span>
+                )}
+                {!isOutOfStock && product.min_order_quantity > 1 && (
+                  <p className="text-sm text-gray-300">
+                    Minimum order: {product.min_order_quantity} items
+                  </p>
+                )}
+                {!isOutOfStock && product.max_order_quantity && (
+                  <p className="text-sm text-gray-300">
+                    Maximum order: {product.max_order_quantity} items
+                  </p>
+                )}
               </div>
+
+              <Link
+                href={!isOutOfStock ? `/p/${product.slug}/order?quantity=${orderQuantity}` : '#'}
+                className={cn(
+                  "inline-flex h-14 items-center justify-center rounded-full px-8 text-base font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 group",
+                  !isOutOfStock
+                    ? "bg-white text-gray-900 hover:bg-gray-100 hover:shadow-glow-white"
+                    : "bg-white/20 text-white/60 cursor-not-allowed backdrop-blur-sm"
+                )}
+                tabIndex={isOutOfStock ? -1 : 0}
+                aria-label={!isOutOfStock ? `Buy ${product.title} now for ${formatCurrency(product.price * orderQuantity, product.currency)}` : 'Out of stock'}
+                onClick={(e) => {
+                  if (isOutOfStock) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {!isOutOfStock ? (
+                  <>
+                    <ShoppingCart className="h-5 w-5 mr-2" />
+                    Buy Now
+                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </>
+                ) : (
+                  "Out of Stock"
+                )}
+              </Link>
             </div>
           </div>
         </div>
@@ -129,13 +257,27 @@ export function PremiumTemplate({ product }: PremiumTemplateProps) {
             </p>
             
             <Link
-              href={`/p/${product.slug}/order`}
-              className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-base font-medium text-gray-900 transition-all hover:bg-gray-100 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2"
-              tabIndex={0}
-              aria-label={`Buy ${product.title} now for ${formatCurrency(product.price, product.currency)}`}
+              href={!isOutOfStock ? `/p/${product.slug}/order?quantity=${orderQuantity}` : '#'}
+              className={cn(
+                "inline-flex h-14 items-center justify-center rounded-full px-8 text-base font-medium transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2",
+                !isOutOfStock
+                  ? "bg-white text-gray-900 hover:bg-gray-100"
+                  : "bg-white/20 text-white/60 cursor-not-allowed"
+              )}
+              tabIndex={isOutOfStock ? -1 : 0}
+              aria-label={!isOutOfStock ? `Buy ${product.title} now` : 'Out of stock'}
+              onClick={(e) => {
+                if (isOutOfStock) {
+                  e.preventDefault();
+                }
+              }}
             >
               <Shield className="h-5 w-5 mr-2" />
-              Secure Checkout - {formatCurrency(product.price, product.currency)}
+              {!isOutOfStock ? (
+                <>Secure Checkout - {formatCurrency(product.price, product.currency)}</>
+              ) : (
+                "Out of Stock"
+              )}
             </Link>
             
             <p className="text-sm text-gray-400">

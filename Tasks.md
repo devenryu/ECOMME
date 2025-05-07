@@ -78,3 +78,16 @@ Always use pnpm
 | 32    [x]    | Configure Tailwind theme (colors, typography)                        | Styling                                  |
 | 33    [x]    | Write README with setup, env vars, run instructions                  | Documentation                            |
 | 34    [x]    | Write database migration and seed scripts                            | Deployment prep   
+| 35    [x]    | Extend product DB schema to support multiple sizes                   | Data modeling                            |
+| 36    [x]    | Extend product DB schema to support multiple colors                  | Data modeling                            |
+| 37    [x]    | Extend product DB schema to support multiple images                  | Data modeling                            |
+| 38    [x]    | Update product API endpoints to handle sizes, colors, images         | Product API                              |
+| 39    [x]    | Update product creation/edit form to add/remove sizes                | Product creation UI                      |
+| 40    [x]    | Update product creation/edit form to add/remove colors               | Product creation UI                      |
+| 41    [x]    | Update product creation/edit form to upload/manage multiple images   | Product creation UI                      |
+| 42    [x]    | Update product page templates to display selectable sizes            | UI components                            |
+| 43    [x]    | Update product page templates to display selectable colors           | UI components                            |
+| 44    [x]    | Update product page templates to display image gallery               | UI components                            | 
+| 44    [ ]    | Extend product DB schema to support Quantity                         | Data modeling                            | 
+| 44    [ ]    | Update product creation/edit form to Quantity                        | Product creation UI                      | 
+| 44    [ ]    | Update product page templates to calculate and show change order Quantity  | UI components                      | 

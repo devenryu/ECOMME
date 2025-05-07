@@ -21,6 +21,10 @@ interface Order {
   email: string;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   created_at: string;
+  quantity: number;
+  total_amount: number;
+  size?: string;
+  color?: string;
   products: {
     title: string;
     price: number;
@@ -89,6 +93,8 @@ export function OrdersTable({ productId, initialOrders = [] }: OrdersTableProps)
               <TableHead>Order ID</TableHead>
               <TableHead>Product</TableHead>
               <TableHead>Customer</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -97,7 +103,7 @@ export function OrdersTable({ productId, initialOrders = [] }: OrdersTableProps)
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6">
+                <TableCell colSpan={8} className="text-center py-6">
                   Loading orders...
                 </TableCell>
               </TableRow>
@@ -114,6 +120,20 @@ export function OrdersTable({ productId, initialOrders = [] }: OrdersTableProps)
                           order.products.currency
                         )}
                       </div>
+                      {(order.size || order.color) && (
+                        <div className="text-sm text-gray-500 flex items-center gap-2">
+                          {order.size && <span>Size: {order.size}</span>}
+                          {order.color && (
+                            <span className="flex items-center gap-1">
+                              Color: {order.color}
+                              <div 
+                                className="w-3 h-3 rounded-full border border-gray-200" 
+                                style={{ backgroundColor: order.color }}
+                              />
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -121,6 +141,12 @@ export function OrdersTable({ productId, initialOrders = [] }: OrdersTableProps)
                       <div className="font-medium">{order.full_name}</div>
                       <div className="text-sm text-gray-500">{order.email}</div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {order.quantity} {order.quantity > 1 ? 'items' : 'item'}
+                  </TableCell>
+                  <TableCell className="font-medium text-primary">
+                    {formatCurrency(order.total_amount, order.products.currency)}
                   </TableCell>
                   <TableCell>
                     <OrderStatusBadge status={order.status} />
@@ -139,7 +165,7 @@ export function OrdersTable({ productId, initialOrders = [] }: OrdersTableProps)
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-6">
+                <TableCell colSpan={8} className="text-center py-6">
                   No orders found.
                 </TableCell>
               </TableRow>

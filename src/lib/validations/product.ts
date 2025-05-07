@@ -11,6 +11,15 @@ export const productSchema = z.object({
   image_url: z.string().url('Invalid image URL').optional(),
   features: z.array(z.string()).default([]),
   slug: z.string().optional(),
+  sizes: z.array(z.string()).optional(),
+  colors: z.array(z.string()).optional(),
+  images: z.array(z.string()).optional(),
+  quantity: z.number().min(0, 'Quantity must be non-negative').default(0),
+  min_order_quantity: z.number().min(1, 'Minimum order quantity must be at least 1').default(1),
+  max_order_quantity: z.number().min(1, 'Maximum order quantity must be at least 1')
+    .nullable()
+    .refine(val => val === null || val >= 1, 'Maximum order quantity must be at least 1')
+    .optional(),
 });
 
 export type ProductFormData = z.infer<typeof productSchema>; 

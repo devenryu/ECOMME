@@ -15,6 +15,10 @@ export interface Product {
   slug: string;
   created_at: string;
   updated_at: string;
+  features?: string[];
+  sizes?: string[];
+  colors?: string[];
+  images?: string[];
 }
 
 export interface Order {

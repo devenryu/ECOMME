@@ -62,7 +62,7 @@ export async function PATCH(
     }
 
     // Prepare update data - only include fields that can be updated
-    const { title, description, price, currency, status, template_type, image_url, features } = body;
+    const { title, description, price, currency, status, template_type, image_url, features, sizes, colors, images } = body;
     const updateData = {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
@@ -72,6 +72,9 @@ export async function PATCH(
       ...(template_type !== undefined && { template_type }),
       ...(image_url !== undefined && { image_url }),
       ...(features !== undefined && { features }),
+      ...(sizes !== undefined && { sizes }),
+      ...(colors !== undefined && { colors }),
+      ...(images !== undefined && { images }),
     };
     
     // Only regenerate slug if title has changed

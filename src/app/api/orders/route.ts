@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
           title,
           price,
           currency,
-          seller_id
+          seller_id,
+          quantity,
+          min_order_quantity,
+          max_order_quantity
         )
       `)
       .order('created_at', { ascending: false });
@@ -70,15 +73,36 @@ export async function POST(request: NextRequest) {
     // Get the current user's session
     const { data: { session } } = await supabase.auth.getSession();
     
-    // Get product details to calculate total amount
+    // Get product details to calculate total amount and validate quantity
     const { data: product, error: productError } = await supabase
       .from('products')
-      .select('id, price')
+      .select('id, price, quantity, min_order_quantity, max_order_quantity')
       .eq('id', body.productId)
       .single();
 
     if (productError) {
       throw productError;
+    }
+
+    // Validate quantity
+    const orderQuantity = validatedData.quantity;
+    if (orderQuantity < product.min_order_quantity) {
+      return NextResponse.json(
+        { error: `Minimum order quantity is ${product.min_order_quantity}` },
+        { status: 400 }
+      );
+    }
+    if (product.max_order_quantity && orderQuantity > product.max_order_quantity) {
+      return NextResponse.json(
+        { error: `Maximum order quantity is ${product.max_order_quantity}` },
+        { status: 400 }
+      );
+    }
+    if (orderQuantity > product.quantity) {
+      return NextResponse.json(
+        { error: `Only ${product.quantity} items available in stock` },
+        { status: 400 }
+      );
     }
 
     // Create order in database with all required fields
@@ -92,14 +116,33 @@ export async function POST(request: NextRequest) {
         shipping_address: validatedData.shippingAddress,
         notes: validatedData.notes,
         status: 'pending',
-        user_id: session?.user?.id ? session.user.id : '00000000-0000-0000-0000-000000000000', // Explicit check to avoid null/undefined
-        total_amount: product.price
+        user_id: session?.user?.id ? session.user.id : '00000000-0000-0000-0000-000000000000',
+        total_amount: product.price * orderQuantity,
+        quantity: orderQuantity,
+        size: validatedData.size,
+        color: validatedData.color
       })
       .select()
       .single();
 
     if (error) {
       throw error;
+    }
+
+    // Update product quantity
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ quantity: product.quantity - orderQuantity })
+      .eq('id', body.productId);
+
+    if (updateError) {
+      // If updating quantity fails, we should roll back the order
+      await supabase
+        .from('orders')
+        .delete()
+        .eq('id', order.id);
+      
+      throw updateError;
     }
 
     return NextResponse.json(order);

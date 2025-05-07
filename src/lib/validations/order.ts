@@ -6,6 +6,9 @@ export const orderSchema = z.object({
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   shippingAddress: z.string().min(10, 'Please enter a complete shipping address'),
   notes: z.string().optional(),
+  quantity: z.number().min(1, 'Quantity must be at least 1'),
+  size: z.string().optional(),
+  color: z.string().optional(),
 });
 
 export type OrderFormData = z.infer<typeof orderSchema>; 

@@ -109,9 +109,44 @@ export default async function OrderDetailPage({ params }: PageProps) {
                   )}
                   <div className="flex-1">
                     <h3 className="font-medium text-lg">{order.products.title}</h3>
-                    <p className="text-2xl font-bold text-blue-600 mt-2">
-                      {formatCurrency(order.products.price, order.products.currency)}
-                    </p>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Unit Price</span>
+                        <span className="font-medium">
+                          {formatCurrency(order.products.price, order.products.currency)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500">Quantity</span>
+                        <span className="font-medium">
+                          {order.quantity} {order.quantity > 1 ? 'items' : 'item'}
+                        </span>
+                      </div>
+                      {order.size && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500">Size</span>
+                          <span className="font-medium">{order.size}</span>
+                        </div>
+                      )}
+                      {order.color && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500">Color</span>
+                          <span className="font-medium flex items-center gap-2">
+                            {order.color}
+                            <div 
+                              className="w-4 h-4 rounded-full border border-gray-200" 
+                              style={{ backgroundColor: order.color }}
+                            />
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <span className="font-medium">Total</span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {formatCurrency(order.total_amount, order.products.currency)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -168,8 +203,20 @@ export default async function OrderDetailPage({ params }: PageProps) {
                 </div>
                 <dl className="mt-4 divide-y">
                   <div className="py-3 flex justify-between">
-                    <dt className="text-sm text-gray-500">Amount</dt>
-                    <dd className="font-bold text-right">
+                    <dt className="text-sm text-gray-500">Unit Price</dt>
+                    <dd className="font-medium text-right">
+                      {formatCurrency(order.products.price, order.products.currency)}
+                    </dd>
+                  </div>
+                  <div className="py-3 flex justify-between">
+                    <dt className="text-sm text-gray-500">Quantity</dt>
+                    <dd className="font-medium text-right">
+                      {order.quantity} {order.quantity > 1 ? 'items' : 'item'}
+                    </dd>
+                  </div>
+                  <div className="py-3 flex justify-between">
+                    <dt className="text-sm text-gray-500">Total Amount</dt>
+                    <dd className="font-bold text-right text-blue-600">
                       {formatCurrency(order.total_amount, order.products.currency)}
                     </dd>
                   </div>

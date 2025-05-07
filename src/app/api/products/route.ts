@@ -105,6 +105,9 @@ export async function POST(request: NextRequest) {
       .insert([
         {
           ...body,
+          sizes: body.sizes || [],
+          colors: body.colors || [],
+          images: body.images || [],
           seller_id: user.id,
           status: body.status || 'draft',
           slug,

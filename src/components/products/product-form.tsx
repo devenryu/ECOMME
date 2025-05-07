@@ -213,6 +213,137 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
           )}
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="sizes">Sizes</Label>
+          <div className="flex flex-wrap gap-2">
+            {(watch('sizes') || []).map((size: string, idx: number) => (
+              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
+                <span>{size}</span>
+                <button
+                  type="button"
+                  className="text-red-500 hover:text-red-700 focus:outline-none"
+                  aria-label={`Remove size ${size}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    const newSizes = (watch('sizes') || []).filter((_, i) => i !== idx);
+                    setValue('sizes', newSizes);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      const newSizes = (watch('sizes') || []).filter((_, i) => i !== idx);
+                      setValue('sizes', newSizes);
+                    }
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-24"
+              placeholder="Add size"
+              aria-label="Add size"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                  const value = e.currentTarget.value.trim();
+                  if (!(watch('sizes') || []).includes(value)) {
+                    setValue('sizes', [...(watch('sizes') || []), value]);
+                  }
+                  e.currentTarget.value = '';
+                  e.preventDefault();
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="colors">Colors</Label>
+          <div className="flex flex-wrap gap-2">
+            {(watch('colors') || []).map((color: string, idx: number) => (
+              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
+                <span>{color}</span>
+                <button
+                  type="button"
+                  className="text-red-500 hover:text-red-700 focus:outline-none"
+                  aria-label={`Remove color ${color}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    const newColors = (watch('colors') || []).filter((_, i) => i !== idx);
+                    setValue('colors', newColors);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      const newColors = (watch('colors') || []).filter((_, i) => i !== idx);
+                      setValue('colors', newColors);
+                    }
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-24"
+              placeholder="Add color"
+              aria-label="Add color"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                  const value = e.currentTarget.value.trim();
+                  if (!(watch('colors') || []).includes(value)) {
+                    setValue('colors', [...(watch('colors') || []), value]);
+                  }
+                  e.currentTarget.value = '';
+                  e.preventDefault();
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="images">Product Images</Label>
+          <div className="flex flex-wrap gap-2">
+            {(watch('images') || []).map((img: string, idx: number) => (
+              <div key={idx} className="relative w-24 h-24 border rounded overflow-hidden flex flex-col items-center justify-center">
+                <img src={img} alt={`Product image ${idx + 1}`} className="object-cover w-full h-full" />
+                <button
+                  type="button"
+                  className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 text-red-500 hover:text-red-700 focus:outline-none"
+                  aria-label={`Remove image ${idx + 1}`}
+                  tabIndex={0}
+                  onClick={() => {
+                    const newImages = (watch('images') || []).filter((_, i) => i !== idx);
+                    setValue('images', newImages);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      const newImages = (watch('images') || []).filter((_, i) => i !== idx);
+                      setValue('images', newImages);
+                    }
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <div className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed rounded cursor-pointer">
+              <ImageUpload
+                value={undefined}
+                onChange={url => {
+                  if (url && !(watch('images') || []).includes(url)) {
+                    setValue('images', [...(watch('images') || []), url]);
+                  }
+                }}
+                onError={() => toast.error('Failed to upload image')}
+                onUploadStateChange={handleImageUploadStateChange}
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="price">Price</Label>
@@ -246,6 +377,62 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
                 <SelectItem value="GBP">GBP</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="quantity">Stock Quantity</Label>
+            <Input
+              id="quantity"
+              type="number"
+              min="0"
+              placeholder="0"
+              {...register('quantity', { valueAsNumber: true })}
+              aria-describedby={errors.quantity ? 'quantity-error' : undefined}
+            />
+            {errors.quantity && (
+              <p className="text-sm text-red-500" id="quantity-error">
+                {errors.quantity.message}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="min_order_quantity">Min Order Quantity</Label>
+            <Input
+              id="min_order_quantity"
+              type="number"
+              min="1"
+              placeholder="1"
+              {...register('min_order_quantity', { valueAsNumber: true })}
+              aria-describedby={errors.min_order_quantity ? 'min-order-quantity-error' : undefined}
+            />
+            {errors.min_order_quantity && (
+              <p className="text-sm text-red-500" id="min-order-quantity-error">
+                {errors.min_order_quantity.message}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="max_order_quantity">Max Order Quantity</Label>
+            <Input
+              id="max_order_quantity"
+              type="number"
+              min="1"
+              placeholder="Optional"
+              {...register('max_order_quantity', { 
+                valueAsNumber: true,
+                setValueAs: v => v === '' ? null : Number(v)
+              })}
+              aria-describedby={errors.max_order_quantity ? 'max-order-quantity-error' : undefined}
+            />
+            {errors.max_order_quantity && (
+              <p className="text-sm text-red-500" id="max-order-quantity-error">
+                {errors.max_order_quantity.message}
+              </p>
+            )}
           </div>
         </div>
 
