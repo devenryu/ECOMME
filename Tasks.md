@@ -88,6 +88,13 @@ Always use pnpm
 | 42    [x]    | Update product page templates to display selectable sizes            | UI components                            |
 | 43    [x]    | Update product page templates to display selectable colors           | UI components                            |
 | 44    [x]    | Update product page templates to display image gallery               | UI components                            | 
-| 44    [ ]    | Extend product DB schema to support Quantity                         | Data modeling                            | 
-| 44    [ ]    | Update product creation/edit form to Quantity                        | Product creation UI                      | 
-| 44    [ ]    | Update product page templates to calculate and show change order Quantity  | UI components                      | 
+| 44    [x]    | Extend product DB schema to support Quantity                         | Data modeling                            | 
+| 44    [x]    | Update product creation/edit form to Quantity                        | Product creation UI                      | 
+| 44    [x]    | Update product page templates to calculate and show change order Quantity  | UI components                      | 
+
+next tasks:
+ -update the colors and sizes implementation ( The implementation of colors and sizes isn't appropriate 
+    Colors should be chosen from a color field or idk in the product creation and shown as colors in the product page
+    Sizes can be different based on products like shoes and t-shirt not same size and all )
+
+ -add template library with deffrent product template layout colors and design of the page but same functionalities

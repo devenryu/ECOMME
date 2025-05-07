@@ -61,9 +61,27 @@ export async function PATCH(
       );
     }
 
+    // Extract colors to handle separately
+    const colorsData = body.colors || [];
+    const { colors, ...restBody } = body;
+
     // Prepare update data - only include fields that can be updated
-    const { title, description, price, currency, status, template_type, image_url, features, sizes, colors, images } = body;
-    const updateData = {
+    const { title, description, price, currency, status, template_type, image_url, features, sizes, images } = restBody;
+    
+    // Define the update data object with proper typing
+    const updateData: {
+      title?: string;
+      description?: string;
+      price?: number;
+      currency?: string;
+      status?: string;
+      template_type?: string;
+      image_url?: string;
+      features?: any[];
+      sizes?: string[];
+      images?: string[];
+      slug?: string;
+    } = {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
       ...(price !== undefined && { price }),
@@ -73,7 +91,6 @@ export async function PATCH(
       ...(image_url !== undefined && { image_url }),
       ...(features !== undefined && { features }),
       ...(sizes !== undefined && { sizes }),
-      ...(colors !== undefined && { colors }),
       ...(images !== undefined && { images }),
     };
     
@@ -102,6 +119,34 @@ export async function PATCH(
         { error: error.message },
         { status: 500 }
       );
+    }
+
+    // Update colors if they were provided
+    if (colors !== undefined) {
+      // First, delete existing colors
+      const { error: deleteError } = await supabase
+        .from('product_colors')
+        .delete()
+        .eq('product_id', params.id);
+
+      if (deleteError) {
+        console.error(`[API] Error deleting existing colors for product ${params.id}:`, deleteError);
+      } else if (colorsData.length > 0) {
+        // Then insert new colors
+        const productColors = colorsData.map((color: any) => ({
+          product_id: params.id,
+          color_id: color.custom ? null : color.id,
+          custom_hex_code: color.custom ? color.hex_code : null
+        }));
+
+        const { error: insertError } = await supabase
+          .from('product_colors')
+          .insert(productColors);
+
+        if (insertError) {
+          console.error(`[API] Error inserting new colors for product ${params.id}:`, insertError);
+        }
+      }
     }
 
     console.log(`[API] Product ${params.id} updated successfully`);

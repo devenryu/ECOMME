@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { X } from 'lucide-react';
+import { X, Upload, ImagePlus } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from './button';
 import { Database } from '@/lib/supabase/types';
@@ -12,9 +12,16 @@ interface ImageUploadProps {
   onChange: (value: string) => void;
   onError?: (error: Error) => void;
   onUploadStateChange?: (isUploading: boolean) => void;
+  variant?: 'default' | 'icon';
 }
 
-export function ImageUpload({ value, onChange, onError, onUploadStateChange }: ImageUploadProps) {
+export function ImageUpload({ 
+  value, 
+  onChange, 
+  onError, 
+  onUploadStateChange,
+  variant = 'default'
+}: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const supabase = createClientComponentClient<Database>();
 
@@ -62,6 +69,31 @@ export function ImageUpload({ value, onChange, onError, onUploadStateChange }: I
   const handleRemove = () => {
     onChange('');
   };
+
+  if (variant === 'icon') {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center p-4 cursor-pointer text-gray-500 hover:text-gray-700 transition-colors">
+        <input
+          id="image-upload-icon"
+          type="file"
+          accept="image/*"
+          onChange={handleUpload}
+          className="hidden"
+        />
+        <button
+          type="button" 
+          onClick={() => document.getElementById('image-upload-icon')?.click()}
+          className="flex flex-col items-center justify-center gap-2"
+          disabled={isUploading}
+        >
+          <ImagePlus className="h-8 w-8" />
+          <span className="text-sm">
+            {isUploading ? 'Uploading...' : 'Add Image'}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

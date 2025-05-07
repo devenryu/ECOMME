@@ -66,7 +66,6 @@ export async function GET(
         slug,
         status,
         images,
-        colors,
         sizes,
         quantity,
         min_order_quantity,
@@ -115,6 +114,46 @@ export async function GET(
         { error: 'Product not found' },
         { status: 404 }
       );
+    }
+
+    // Fetch product colors from relationship table
+    const { data: productColors, error: colorsError } = await supabase
+      .from('product_colors')
+      .select(`
+        id,
+        color_id,
+        custom_hex_code,
+        standard_colors(id, name, hex_code)
+      `)
+      .eq('product_id', product.id);
+
+    if (colorsError) {
+      console.error(`[PUBLIC API] Error fetching product colors: ${colorsError.message}`);
+    } else {
+      // Define proper types for color data
+      interface StandardColor {
+        id: string;
+        name: string;
+        hex_code: string;
+      }
+      
+      interface ProductColor {
+        id: string;
+        color_id: string | null;
+        custom_hex_code: string | null;
+        standard_colors: StandardColor | null;
+      }
+      
+      // Format colors to a consistent structure
+      const formattedColors = (productColors as ProductColor[]).map(item => ({
+        id: item.color_id || item.id,
+        name: item.standard_colors?.name || 'Custom',
+        hex_code: item.custom_hex_code || item.standard_colors?.hex_code,
+        custom: !!item.custom_hex_code
+      }));
+      
+      // Add colors to the product using type assertion
+      (product as any).colors = formattedColors;
     }
 
     console.log(`[PUBLIC API] Successfully fetched product: ${product.title}`);

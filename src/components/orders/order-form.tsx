@@ -22,7 +22,12 @@ interface OrderFormProps {
     max_order_quantity?: number | null;
     quantity: number;
     sizes?: string[];
-    colors?: string[];
+    colors?: Array<{
+      id: string;
+      name: string;
+      hex_code: string;
+      custom?: boolean;
+    }>;
     price: number;
     currency: string;
   };
@@ -38,6 +43,11 @@ export function OrderForm({
 }: OrderFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  // Find the color object that matches the initialColor (which could be an id or hex code)
+  const selectedColorObject = product.colors?.find(c => 
+    c.id === initialColor || c.hex_code === initialColor
+  );
 
   const {
     register,
@@ -102,9 +112,10 @@ export function OrderForm({
               <div className="flex items-center gap-2">
                 <div 
                   className="w-4 h-4 rounded-full border border-gray-200" 
-                  style={{ backgroundColor: initialColor }}
+                  style={{ backgroundColor: selectedColorObject?.hex_code || initialColor }}
+                  aria-label={selectedColorObject?.name || 'Selected color'}
                 ></div>
-                <span className="font-medium">{initialColor}</span>
+                <span className="font-medium">{selectedColorObject?.name || initialColor}</span>
               </div>
             </div>
           )}

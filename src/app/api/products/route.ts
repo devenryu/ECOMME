@@ -99,17 +99,22 @@ export async function POST(request: NextRequest) {
     const uniqueId = generateProductId();
     const slug = `${baseSlug}-${uniqueId}`;
 
+    // Save colors to temporary variable
+    const colorsData = body.colors || [];
+    
+    // Remove colors from the body to insert them separately
+    const { colors, ...productData } = body;
+
     // Insert new product
     const { data: product, error } = await supabase
       .from('products')
       .insert([
         {
-          ...body,
-          sizes: body.sizes || [],
-          colors: body.colors || [],
-          images: body.images || [],
+          ...productData,
+          sizes: productData.sizes || [],
+          images: productData.images || [],
           seller_id: user.id,
-          status: body.status || 'draft',
+          status: productData.status || 'draft',
           slug,
           is_deleted: false // Explicitly set is_deleted to false for new products
         },
@@ -119,6 +124,23 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       throw error;
+    }
+
+    // Save colors to product_colors relation table
+    if (colorsData.length > 0) {
+      const productColors = colorsData.map((color: any) => ({
+        product_id: product.id,
+        color_id: color.custom ? null : color.id,
+        custom_hex_code: color.custom ? color.hex_code : null
+      }));
+
+      const { error: colorsError } = await supabase
+        .from('product_colors')
+        .insert(productColors);
+
+      if (colorsError) {
+        console.error('Error saving product colors:', colorsError);
+      }
     }
 
     return NextResponse.json(product);

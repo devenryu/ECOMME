@@ -17,9 +17,19 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { TemplateSelector } from '@/components/products/template-selector';
+import { ColorSelector } from '@/components/products/color-selector';
+import { SizeSelector } from '@/components/products/size-selector';
 import { ImageUpload } from '@/components/ui/image-upload';
+import { MultiImageUpload } from '@/components/ui/multi-image-upload';
 import { toast } from 'sonner';
-import { Copy, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Copy, ExternalLink, AlertTriangle, X } from 'lucide-react';
+
+interface Color {
+  id?: string;
+  name: string;
+  hex_code: string;
+  custom?: boolean;
+}
 
 interface ProductFormProps {
   initialData?: ProductFormData;
@@ -45,6 +55,9 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
       template_type: 'standard',
       currency: 'USD',
       features: [],
+      product_type: 'other',
+      colors: [],
+      sizes: [],
     },
   });
 
@@ -54,7 +67,19 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
       toast.error('Please wait for the image to finish uploading');
       return;
     }
-
+    
+    // Combine the first image with additional images
+    const allImages = [
+      ...(data.image_url ? [data.image_url] : []),
+      ...(data.images || [])
+    ].filter(Boolean);
+    
+    // Update the data with the combined images 
+    if (allImages.length > 0) {
+      data.image_url = allImages[0];
+      data.images = allImages.slice(1);
+    }
+    
     try {
       setIsLoading(true);
       if (onSubmit) {
@@ -128,6 +153,8 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
 
   const selectedTemplate = watch('template_type');
   const hasImageUrl = !!watch('image_url');
+  const productType = watch('product_type');
+  const sizeCategoryId = watch('size_category_id');
   
   const handleCopyLink = () => {
     if (createdProduct?.slug) {
@@ -214,134 +241,81 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="sizes">Sizes</Label>
-          <div className="flex flex-wrap gap-2">
-            {(watch('sizes') || []).map((size: string, idx: number) => (
-              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
-                <span>{size}</span>
-                <button
-                  type="button"
-                  className="text-red-500 hover:text-red-700 focus:outline-none"
-                  aria-label={`Remove size ${size}`}
-                  tabIndex={0}
-                  onClick={() => {
-                    const newSizes = (watch('sizes') || []).filter((_, i) => i !== idx);
-                    setValue('sizes', newSizes);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      const newSizes = (watch('sizes') || []).filter((_, i) => i !== idx);
-                      setValue('sizes', newSizes);
-                    }
-                  }}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-            <input
-              type="text"
-              className="border rounded px-2 py-1 w-24"
-              placeholder="Add size"
-              aria-label="Add size"
-              onKeyDown={e => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  const value = e.currentTarget.value.trim();
-                  if (!(watch('sizes') || []).includes(value)) {
-                    setValue('sizes', [...(watch('sizes') || []), value]);
-                  }
-                  e.currentTarget.value = '';
-                  e.preventDefault();
-                }
-              }}
-            />
-          </div>
+          <Label htmlFor="product_type">Product Type</Label>
+          <Select
+            defaultValue={watch('product_type')}
+            onValueChange={(value: 'clothing' | 'shoes' | 'accessories' | 'electronics' | 'other') => {
+              setValue('product_type', value);
+              
+              // Reset size category when product type changes
+              setValue('size_category_id', undefined);
+              setValue('sizes', []);
+            }}
+          >
+            <SelectTrigger id="product_type">
+              <SelectValue placeholder="Select product type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="clothing">Clothing</SelectItem>
+              <SelectItem value="shoes">Shoes</SelectItem>
+              <SelectItem value="accessories">Accessories</SelectItem>
+              <SelectItem value="electronics">Electronics</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {errors.product_type && (
+            <p className="text-sm text-red-500" id="product_type-error">
+              {errors.product_type.message}
+            </p>
+          )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="colors">Colors</Label>
-          <div className="flex flex-wrap gap-2">
-            {(watch('colors') || []).map((color: string, idx: number) => (
-              <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
-                <span>{color}</span>
-                <button
-                  type="button"
-                  className="text-red-500 hover:text-red-700 focus:outline-none"
-                  aria-label={`Remove color ${color}`}
-                  tabIndex={0}
-                  onClick={() => {
-                    const newColors = (watch('colors') || []).filter((_, i) => i !== idx);
-                    setValue('colors', newColors);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      const newColors = (watch('colors') || []).filter((_, i) => i !== idx);
-                      setValue('colors', newColors);
-                    }
-                  }}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-            <input
-              type="text"
-              className="border rounded px-2 py-1 w-24"
-              placeholder="Add color"
-              aria-label="Add color"
-              onKeyDown={e => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  const value = e.currentTarget.value.trim();
-                  if (!(watch('colors') || []).includes(value)) {
-                    setValue('colors', [...(watch('colors') || []), value]);
-                  }
-                  e.currentTarget.value = '';
-                  e.preventDefault();
-                }
-              }}
-            />
-          </div>
-        </div>
+        {/* Size Selector */}
+        <SizeSelector
+          selectedSizes={watch('sizes') || []}
+          sizeCategoryId={sizeCategoryId}
+          onSizeCategoryChange={(categoryId) => setValue('size_category_id', categoryId)}
+          onSizesChange={(sizes) => setValue('sizes', sizes)}
+        />
+
+        {/* Color Selector */}
+        <ColorSelector
+          selectedColors={watch('colors') || []}
+          onChange={(colors) => {
+            // Ensure all colors have id property
+            const validColors = colors.map(color => ({
+              ...color,
+              id: color.id || `custom-${Date.now()}`,
+              custom: !!color.custom,
+            }));
+            setValue('colors', validColors);
+          }}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="images">Product Images</Label>
-          <div className="flex flex-wrap gap-2">
-            {(watch('images') || []).map((img: string, idx: number) => (
-              <div key={idx} className="relative w-24 h-24 border rounded overflow-hidden flex flex-col items-center justify-center">
-                <img src={img} alt={`Product image ${idx + 1}`} className="object-cover w-full h-full" />
-                <button
-                  type="button"
-                  className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 text-red-500 hover:text-red-700 focus:outline-none"
-                  aria-label={`Remove image ${idx + 1}`}
-                  tabIndex={0}
-                  onClick={() => {
-                    const newImages = (watch('images') || []).filter((_, i) => i !== idx);
-                    setValue('images', newImages);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      const newImages = (watch('images') || []).filter((_, i) => i !== idx);
-                      setValue('images', newImages);
-                    }
-                  }}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-            <div className="flex flex-col items-center justify-center w-24 h-24 border-2 border-dashed rounded cursor-pointer">
-              <ImageUpload
-                value={undefined}
-                onChange={url => {
-                  if (url && !(watch('images') || []).includes(url)) {
-                    setValue('images', [...(watch('images') || []), url]);
-                  }
-                }}
-                onError={() => toast.error('Failed to upload image')}
-                onUploadStateChange={handleImageUploadStateChange}
-              />
-            </div>
-          </div>
+          <MultiImageUpload
+            images={[
+              ...(watch('image_url') ? [watch('image_url')] : []), 
+              ...(watch('images') || [])
+            ].filter(Boolean) as string[]}
+            onChange={(updatedImages) => {
+              if (updatedImages.length > 0) {
+                setValue('image_url', updatedImages[0]);
+                setValue('images', updatedImages.slice(1));
+              } else {
+                setValue('image_url', '');
+                setValue('images', []);
+              }
+            }}
+            onError={() => toast.error('Failed to upload image')}
+            onUploadStateChange={handleImageUploadStateChange}
+          />
+          {(errors.image_url || errors.images) && (
+            <p className="text-sm text-red-500" id="image_url-error">
+              {errors.image_url?.message || errors.images?.message}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -416,15 +390,15 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="max_order_quantity">Max Order Quantity</Label>
+            <Label htmlFor="max_order_quantity">Max Order Quantity (Optional)</Label>
             <Input
               id="max_order_quantity"
               type="number"
               min="1"
-              placeholder="Optional"
+              placeholder="Leave empty for no limit"
               {...register('max_order_quantity', { 
                 valueAsNumber: true,
-                setValueAs: v => v === '' ? null : Number(v)
+                setValueAs: v => v === '' || isNaN(Number(v)) ? null : Number(v)
               })}
               aria-describedby={errors.max_order_quantity ? 'max-order-quantity-error' : undefined}
             />
@@ -462,51 +436,21 @@ export function ProductForm({ initialData, onSubmit }: ProductFormProps) {
             onChange={(value) => setValue('template_type', value)}
           />
         </div>
-
-        <div className="space-y-2">
-          <Label>Product Image</Label>
-          <ImageUpload
-            value={watch('image_url')}
-            onChange={(url) => setValue('image_url', url)}
-            onError={(error) => toast.error('Failed to upload image')}
-            onUploadStateChange={handleImageUploadStateChange}
-          />
-        </div>
       </div>
 
-      {!createdProduct && (
-        <div>
-          {isImageUploading && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              <p className="text-sm text-yellow-700">Please wait for the image to finish uploading before saving the product.</p>
-            </div>
-          )}
-          <div className="flex justify-end gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isLoading || isImageUploading}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading || isImageUploading}
-              className={isImageUploading ? "opacity-50 cursor-not-allowed" : ""}
-            >
-              {isLoading 
-                ? 'Saving...' 
-                : isImageUploading 
-                  ? 'Waiting for upload...' 
-                  : initialData 
-                    ? 'Update Product' 
-                    : 'Save Product'}
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="flex justify-end space-x-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push('/dashboard/products')}
+          disabled={isLoading}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading || isImageUploading}>
+          {isLoading ? 'Saving...' : initialData ? 'Update Product' : 'Create Product'}
+        </Button>
+      </div>
     </form>
   );
 } 

@@ -7,6 +7,13 @@ import { Check, ArrowRight, ShoppingCart } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
+interface Color {
+  id?: string;
+  name: string;
+  hex_code: string;
+  custom?: boolean;
+}
+
 interface StandardTemplateProps {
   product: {
     title: string;
@@ -16,7 +23,7 @@ interface StandardTemplateProps {
     image_url?: string;
     slug: string;
     sizes?: string[];
-    colors?: string[];
+    colors?: Color[];
     images?: string[];
     quantity: number;
     min_order_quantity: number;
@@ -142,21 +149,29 @@ export function StandardTemplate({ product }: StandardTemplateProps)  {
                 <div className="space-y-3">
                   <h3 className="font-medium">Color</h3>
                   <div className="flex space-x-2">
-                    {product.colors.map((color, i) => (
+                    {product.colors.map((color) => (
                       <button
-                        key={color}
-                        className={`w-8 h-8 rounded-full border-2 border-white ring-1 ring-border focus:outline-none focus:ring-primary transition-colors ${selectedColor === color ? 'ring-2 ring-primary' : 'hover:ring-primary'}`}
-                        style={{ backgroundColor: color }}
-                        aria-label={`Select color ${color}`}
+                        key={color.id || `color-${color.hex_code}`}
+                        className={`w-8 h-8 rounded-full border-2 border-white ring-1 ring-border focus:outline-none focus:ring-primary transition-colors ${selectedColor === (color.id || `color-${color.hex_code}`) ? 'ring-2 ring-primary' : 'hover:ring-primary'}`}
+                        style={{ backgroundColor: color.hex_code }}
+                        aria-label={`Select color ${color.name}`}
+                        title={color.name}
                         tabIndex={0}
-                        onClick={() => setSelectedColor(color)}
+                        onClick={() => setSelectedColor(color.id || `color-${color.hex_code}`)}
                         onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ' ') setSelectedColor(color);
+                          if (e.key === 'Enter' || e.key === ' ') setSelectedColor(color.id || `color-${color.hex_code}`);
                         }}
-                        aria-pressed={selectedColor === color}
-                      />
+                        aria-pressed={selectedColor === (color.id || `color-${color.hex_code}`)}
+                      >
+                        <span className="sr-only">{color.name}</span>
+                      </button>
                     ))}
                   </div>
+                  {selectedColor && (
+                    <div className="text-sm text-gray-600">
+                      Selected: {product.colors.find(c => (c.id || `color-${c.hex_code}`) === selectedColor)?.name || 'Color'}
+                    </div>
+                  )}
                 </div>
               )}
               
