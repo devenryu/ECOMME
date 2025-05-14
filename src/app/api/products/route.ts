@@ -60,6 +60,47 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
+    // Get view counts for each product
+    if (products && products.length > 0) {
+      const productsWithViewCounts = await Promise.all(
+        products.map(async (product) => {
+          try {
+            // Get total view count for this product
+            const { data: viewCount, error: viewCountError } = await supabase.rpc(
+              'get_product_view_count',
+              {
+                product_id: product.id,
+                period: 'all'
+              }
+            );
+            
+            if (viewCountError) {
+              console.error(`Error fetching view count for product ${product.id}:`, viewCountError);
+              return { ...product, view_count: 0 };
+            }
+            
+            return {
+              ...product,
+              view_count: viewCount || 0
+            };
+          } catch (err) {
+            console.error(`Error processing view count for product ${product.id}:`, err);
+            return { ...product, view_count: 0 };
+          }
+        })
+      );
+      
+      return NextResponse.json({
+        products: productsWithViewCounts,
+        pagination: {
+          page,
+          limit,
+          total: count || 0,
+          totalPages: count ? Math.ceil(count / limit) : 0,
+        },
+      });
+    }
+
     return NextResponse.json({
       products,
       pagination: {
@@ -102,10 +143,30 @@ export async function POST(request: NextRequest) {
     // Save colors to temporary variable
     const colorsData = body.colors || [];
     
+    console.log(`[API] Creating product with colors:`, colorsData);
+    
+    // Define color interface
+    interface ProductColor {
+      id: string;
+      name: string;
+      hex_code: string;
+      custom?: boolean;
+    }
+    
+    // We want to keep colors in the product record for backwards compatibility
+    // but also need to save them to the product_colors table
+    
     // Remove colors from the body to insert them separately
-    const { colors, ...productData } = body;
+    // But keep a copy in the product record for backwards compatibility
+    const { ...productData } = body;
 
-    // Insert new product
+    // Insert new product with colors as string array of hex codes only
+    const colorHexCodes = colorsData && colorsData.length > 0 
+      ? colorsData.map((color: ProductColor) => color.hex_code)
+      : [];
+      
+    console.log(`[API] Creating product with color hex codes:`, colorHexCodes);
+
     const { data: product, error } = await supabase
       .from('products')
       .insert([
@@ -116,7 +177,8 @@ export async function POST(request: NextRequest) {
           seller_id: user.id,
           status: productData.status || 'draft',
           slug,
-          is_deleted: false // Explicitly set is_deleted to false for new products
+          is_deleted: false, // Explicitly set is_deleted to false for new products
+          colors: colorHexCodes // Store just the hex codes as text[] array
         },
       ])
       .select()
@@ -126,20 +188,30 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    // Save colors to product_colors relation table
-    if (colorsData.length > 0) {
-      const productColors = colorsData.map((color: any) => ({
-        product_id: product.id,
-        color_id: color.custom ? null : color.id,
-        custom_hex_code: color.custom ? color.hex_code : null
-      }));
-
-      const { error: colorsError } = await supabase
-        .from('product_colors')
-        .insert(productColors);
-
-      if (colorsError) {
-        console.error('Error saving product colors:', colorsError);
+    // Save colors to product_colors table if colors exist
+    if (colorsData && colorsData.length > 0) {
+      console.log(`[API] Saving ${colorsData.length} colors to product_colors table for product ID: ${product.id}`);
+      
+      try {
+        const colorInserts = colorsData.map((color: ProductColor) => ({
+          product_id: product.id,
+          color_id: color.id,
+          custom_hex_code: color.custom ? color.hex_code : null
+        }));
+        
+        console.log(`[API] Color inserts:`, colorInserts);
+        
+        const { error: colorError } = await supabase
+          .from('product_colors')
+          .insert(colorInserts);
+        
+        if (colorError) {
+          console.error(`[API] Error saving colors to product_colors table:`, colorError);
+        } else {
+          console.log(`[API] Successfully saved ${colorInserts.length} colors to product_colors table`);
+        }
+      } catch (colorInsertError) {
+        console.error(`[API] Exception when saving colors:`, colorInsertError);
       }
     }
 

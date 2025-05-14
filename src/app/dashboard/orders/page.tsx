@@ -1,154 +1,146 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { OrdersTable } from '@/components/orders/orders-table';
-import { OrderStatusBadge } from '@/components/orders/order-status-badge';
-import Link from 'next/link';
-import { formatCurrency } from '@/lib/utils';
+import { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
 
-async function getOrders(statusFilter?: string) {
+import { Shell } from "@/components/shells/shell";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { OrdersTable } from "@/components/orders/orders-table";
+import { ShoppingBag, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Order Management",
+  description: "Manage and track your customer orders",
+};
+
+interface OrderItem {
+  id: string;
+  user_id: string;
+  product_id: string;
+  status: string;
+  total_amount: number;
+  created_at: string;
+  updated_at: string;
+  email: string;
+  full_name: string;
+  currency: string;
+  product: {
+    title: string;
+    price: number;
+    currency: string;
+  };
+}
+
+export default async function OrdersPage() {
   const supabase = createServerComponentClient({ cookies });
 
-  // Get the current user's session
-  const { data: { user } } = await supabase.auth.getUser();
+  // Check if user is authenticated
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
-    return { orders: [], statusCounts: {} };
+    redirect("/login");
   }
 
-  // Build the query
-  let query = supabase
-    .from('orders')
+  // Fetch orders for the current seller
+  const { data: orders, error } = await supabase
+    .from("orders")
     .select(`
       *,
-      products (
+      products!inner (
         title,
         price,
         currency,
         seller_id
       )
     `)
-    .eq('products.seller_id', user.id);
-    
-  // Apply status filter if provided
-  if (statusFilter) {
-    query = query.eq('status', statusFilter);
-  }
-  
-  // Execute the query
-  const { data: orders } = await query.order('created_at', { ascending: false });
+    .eq("products.seller_id", user.id)
+    .order("created_at", { ascending: false });
 
-  // Get counts for all statuses (for the filter tabs)
-  const { data: allOrders } = await supabase
-    .from('orders')
-    .select(`
-      id,
-      status,
-      products!inner (
-        seller_id
-      )
-    `)
-    .eq('products.seller_id', user.id);
-    
-  // Count orders by status
-  const statusCounts = {
-    all: 0,
-    pending: 0,
-    processing: 0,
-    shipped: 0,
-    delivered: 0,
-    cancelled: 0
-  };
-  
-  if (allOrders) {
-    statusCounts.all = allOrders.length;
-    
-    allOrders.forEach(order => {
-      if (statusCounts[order.status as keyof typeof statusCounts] !== undefined) {
-        statusCounts[order.status as keyof typeof statusCounts]++;
-      }
-    });
+  if (error) {
+    console.error("Error fetching orders:", error);
   }
 
-  return { 
-    orders: orders || [],
-    statusCounts
-  };
-}
+  const orderItems: OrderItem[] = orders || [];
 
-export default async function OrdersPage({ 
-  searchParams 
-}: { 
-  searchParams: { status?: string } 
-}) {
-  const statusFilter = searchParams.status || '';
-  const { orders, statusCounts } = await getOrders(statusFilter);
+  // Get order metrics
+  const totalOrders = orderItems.length;
+  const pendingOrders = orderItems.filter(order => order.status === 'pending').length;
+  const processingOrders = orderItems.filter(order => order.status === 'processing').length;
+  const completedOrders = orderItems.filter(order => order.status === 'completed').length;
   
-  const statuses = [
-    { value: '', label: 'All Orders' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'shipped', label: 'Shipped' },
-    { value: 'delivered', label: 'Delivered' },
-    { value: 'cancelled', label: 'Cancelled' }
-  ];
-
+  // Calculate total revenue
+  const totalRevenue = orderItems.reduce((sum, order) => sum + Number(order.total_amount), 0);
+  
+  // Get currency from first order or default to USD
+  const currency = orderItems[0]?.currency || 'USD';
+  
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Orders</h1>
-        <p className="text-gray-500 mt-2">
-          Manage and track your customer orders
-        </p>
+    <Shell>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-heading text-2xl">Order Management</h1>
+          <p className="text-muted-foreground">Manage and track your customer orders</p>
+        </div>
       </div>
       
-      {/* Status filter tabs */}
-      <div className="border-b">
-        <nav className="flex -mb-px space-x-8">
-          {statuses.map(status => {
-            const count = status.value === '' 
-              ? statusCounts.all 
-              : statusCounts[status.value as keyof typeof statusCounts];
-              
-            const isActive = status.value === statusFilter;
-            
-            return (
-              <Link
-                key={status.value}
-                href={status.value ? `/dashboard/orders?status=${status.value}` : '/dashboard/orders'}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                  ${isActive
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }
-                `}
-              >
-                {status.label}
-                <span className={`ml-2 rounded-full text-xs px-2 py-0.5 ${
-                  isActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {count}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+              <div className="text-2xl font-bold">{totalOrders}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Pending Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <Clock className="h-4 w-4 text-amber-500" />
+              <div className="text-2xl font-bold">{pendingOrders}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Processing Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="h-4 w-4 text-blue-500" />
+              <div className="text-2xl font-bold">{processingOrders}</div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <div className="text-2xl font-bold">{formatCurrency(totalRevenue, currency)}</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      
-      {/* Table or empty state */}
-      {orders.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
-          <h3 className="text-lg font-medium text-gray-900">No orders found</h3>
-          <p className="mt-2 text-gray-500">
-            {statusFilter 
-              ? `You don't have any ${statusFilter} orders yet.` 
-              : "You don't have any orders yet."}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-          <OrdersTable initialOrders={orders} />
-        </div>
-      )}
-    </div>
+
+      <div className="bg-white rounded-md border p-6">
+        <OrdersTable initialOrders={orderItems} />
+      </div>
+    </Shell>
   );
 } 

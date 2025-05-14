@@ -1,51 +1,68 @@
-import { cn } from '@/lib/utils';
-import { CheckCircle2, Clock, PackageCheck, Truck, XCircle } from 'lucide-react';
+'use client';
 
-interface OrderStatusBadgeProps {
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+import React from 'react';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+
+export interface OrderStatusBadgeProps {
+  status: string;
+  large?: boolean;
 }
 
-const statusConfig = {
-  pending: {
-    label: 'Pending',
-    className: 'bg-orange-100 text-orange-800 border-orange-200',
-    icon: Clock,
-  },
-  processing: {
-    label: 'Processing',
-    className: 'bg-blue-100 text-blue-800 border-blue-200',
-    icon: PackageCheck,
-  },
-  shipped: {
-    label: 'Shipped',
-    className: 'bg-purple-100 text-purple-800 border-purple-200',
-    icon: Truck,
-  },
-  delivered: {
-    label: 'Delivered',
-    className: 'bg-green-100 text-green-800 border-green-200',
-    icon: CheckCircle2,
-  },
-  cancelled: {
-    label: 'Cancelled',
-    className: 'bg-red-100 text-red-800 border-red-200',
-    icon: XCircle,
-  },
-};
-
-export function OrderStatusBadge({ status }: OrderStatusBadgeProps) {
-  const config = statusConfig[status];
-  const Icon = config.icon;
-
+export function OrderStatusBadge({ status, large = false }: OrderStatusBadgeProps) {
+  const statusLower = status.toLowerCase();
+  
+  const getStatusConfig = () => {
+    switch (statusLower) {
+      case 'pending':
+        return {
+          label: 'Pending',
+          classes: 'bg-amber-50 text-amber-700 border-amber-200',
+        };
+      case 'processing':
+        return {
+          label: 'Processing',
+          classes: 'bg-blue-50 text-blue-700 border-blue-200',
+        };
+      case 'shipped':
+        return {
+          label: 'Shipped',
+          classes: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+        };
+      case 'delivered':
+        return {
+          label: 'Delivered',
+          classes: 'bg-green-50 text-green-700 border-green-200',
+        };
+      case 'completed':
+        return {
+          label: 'Completed',
+          classes: 'bg-green-50 text-green-700 border-green-200',
+        };
+      case 'cancelled':
+        return {
+          label: 'Cancelled',
+          classes: 'bg-red-50 text-red-700 border-red-200',
+        };
+      default:
+        return {
+          label: status,
+          classes: 'bg-gray-50 text-gray-700 border-gray-200',
+        };
+    }
+  };
+  
+  const { label, classes } = getStatusConfig();
+  
   return (
-    <span
+    <Badge 
+      variant="outline" 
       className={cn(
-        'inline-flex items-center rounded-full px-3 py-1 text-sm font-medium border',
-        config.className
+        classes,
+        large && 'px-4 py-1 text-sm font-medium',
       )}
     >
-      <Icon className="w-3.5 h-3.5 mr-1.5" />
-      {config.label}
-    </span>
+      {label}
+    </Badge>
   );
 } 

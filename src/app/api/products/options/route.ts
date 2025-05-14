@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 
+// Force this route to be dynamic as it uses request.url
+export const dynamic = 'force-dynamic';
+
 interface SizeCategory {
   id: string;
   name: string;

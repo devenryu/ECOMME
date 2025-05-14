@@ -86,15 +86,25 @@ export async function getProductColors(productId: string) {
       id: string;
       name: string;
       hex_code: string;
-    } | null;
+    } | {
+      id: string;
+      name: string;
+      hex_code: string;
+    }[] | null;
   }
 
-  return data.map((item: ProductColorItem) => ({
-    id: item.color_id || item.id,
-    name: item.standard_colors?.name || 'Custom',
-    hex_code: item.custom_hex_code || item.standard_colors?.hex_code,
-    custom: !!item.custom_hex_code
-  })) || [];
+  return data.map((item: any) => {
+    const standardColors = Array.isArray(item.standard_colors) 
+      ? item.standard_colors[0] 
+      : item.standard_colors;
+      
+    return {
+      id: item.color_id || item.id,
+      name: standardColors?.name || 'Custom',
+      hex_code: item.custom_hex_code || standardColors?.hex_code,
+      custom: !!item.custom_hex_code
+    };
+  }) || [];
 }
 
 // Function to save product colors

@@ -25,8 +25,8 @@ async function getProduct(slug: string) {
     const response = await fetch(
       `${baseUrl}/api/products-by-slug/${slug}/public`,
       { 
-        next: { revalidate: 60 },
-        cache: 'no-store'
+        cache: 'no-store',
+        next: { revalidate: 0 }
       }
     );
 
@@ -40,6 +40,7 @@ async function getProduct(slug: string) {
     try {
       const data = await response.json();
       console.log(`[Order Page] Successfully fetched product: ${data.title}`);
+      console.log(`[Order Page] Product colors:`, data.colors);
       return data;
     } catch (error) {
       console.error(`[Order Page] JSON parse error:`, error);

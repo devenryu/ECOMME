@@ -16,6 +16,7 @@ interface Color {
 
 interface PremiumTemplateProps {
   product: {
+    id: string;
     title: string;
     description: string;
     price: number;
@@ -127,6 +128,9 @@ export function PremiumTemplate({ product }: PremiumTemplateProps) {
             <div className="space-y-6">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{product.title}</h1>
+                <div className="flex items-center mt-2">
+                  {/* ViewCounter component would be here */}
+                </div>
                 <p className="mt-4 text-muted-foreground text-lg leading-relaxed">{product.description}</p>
               </div>
               

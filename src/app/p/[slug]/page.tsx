@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { MinimalTemplate } from '@/components/templates/minimal';
 import { StandardTemplate } from '@/components/templates/standard';
 import { PremiumTemplate } from '@/components/templates/premium';
+import { trackProductView } from '@/lib/product-tracking';
 
 // Force dynamic rendering and disable caching to resolve stale data issues
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,7 @@ async function getProduct(slug: string) {
 
     const product = await response.json();
     console.log(`[ProductPage] Successfully fetched product: ${product.title}`);
+    console.log(`[ProductPage] Product colors:`, product.colors);
     return product;
   } catch (error) {
     console.error(`[ProductPage] Unexpected error fetching product:`, error);
@@ -55,6 +57,9 @@ export default async function ProductPage({ params }: PageProps) {
     console.log(`[ProductPage] Product not found for slug: ${params.slug}, returning 404`);
     notFound();
   }
+  
+  // Track product view on the server side
+  await trackProductView(product.id);
 
   console.log(`[ProductPage] Rendering template: ${product.template_type} for product: ${product.title}`);
   

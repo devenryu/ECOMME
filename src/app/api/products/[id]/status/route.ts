@@ -4,6 +4,19 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { slugify } from '@/lib/utils';
 
+// Define interface for product update data
+interface ProductUpdateData {
+  title?: string;
+  description?: string;
+  price?: number;
+  currency?: string; 
+  status?: string;
+  template_type?: string;
+  image_url?: string;
+  features?: any[];
+  slug?: string;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -62,7 +75,7 @@ export async function PATCH(
     }
 
     // Handle both simple status updates and full product updates
-    let updateData;
+    let updateData: ProductUpdateData = {};
     
     if (Object.keys(body).length === 1 && 'status' in body) {
       // Simple status update
@@ -78,7 +91,7 @@ export async function PATCH(
       updateData = { status };
     } else {
       // Full product update
-      const { title, description, price, currency, status, template_type, image_url, features } = body;
+      const { title, description, price, currency, status, template_type, image_url, features, slug } = body;
       updateData = {
         ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
@@ -88,6 +101,7 @@ export async function PATCH(
         ...(template_type !== undefined && { template_type }),
         ...(image_url !== undefined && { image_url }),
         ...(features !== undefined && { features }),
+        ...(slug !== undefined && { slug }),
       };
       
       // Only regenerate slug if title has changed

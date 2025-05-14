@@ -1,8 +1,27 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ArrowRight, ArrowUp, ArrowDown, DollarSign, Package, ShoppingCart, TrendingUp, Clock, BarChart3 } from "lucide-react";
+import { 
+  ArrowRight, 
+  ArrowUp, 
+  ArrowDown, 
+  DollarSign, 
+  Package, 
+  ShoppingCart, 
+  TrendingUp, 
+  Clock, 
+  BarChart3,
+  ExternalLink,
+  Star,
+  Truck,
+  Users,
+  PieChart,
+  TrendingDown,
+  Calendar,
+  Activity
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { ProductViewAnalytics } from "@/components/dashboard/ProductViewAnalytics";
 
 async function getDashboardStats(userId: string) {
   const supabase = createServerComponentClient({ cookies });
@@ -37,7 +56,8 @@ async function getDashboardStats(userId: string) {
         title,
         price,
         currency,
-        seller_id
+        seller_id,
+        template_type
       )
     `)
     .eq('products.seller_id', userId)
@@ -55,7 +75,15 @@ async function getDashboardStats(userId: string) {
       currency: 'USD',
       recentOrders: [],
       monthlyOrdersData: [],
-      comparisonWithLastMonth: 0
+      comparisonWithLastMonth: 0,
+      salesByTemplate: [],
+      dailyRevenue: [],
+      customerStats: {
+        newCustomers: 0,
+        returningCustomers: 0,
+        totalCustomers: 0,
+        growthRate: 0
+      }
     };
   }
   
@@ -135,6 +163,86 @@ async function getDashboardStats(userId: string) {
     ? currentMonthOrders > 0 ? 100 : 0
     : Math.round(((currentMonthOrders - previousMonthOrders) / previousMonthOrders) * 100);
   
+  // NEW: Calculate sales by template type
+  const salesByTemplate = orders?.reduce((result: any[], order) => {
+    const templateType = order.products.template_type;
+    const existingTemplate = result.find(item => item.template === templateType);
+    
+    if (existingTemplate) {
+      existingTemplate.orders += 1;
+      existingTemplate.revenue += Number(order.total_amount);
+    } else {
+      result.push({
+        template: templateType,
+        orders: 1,
+        revenue: Number(order.total_amount)
+      });
+    }
+    
+    return result;
+  }, []) || [];
+  
+  // NEW: Calculate daily revenue for the last 7 days
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i)); // Start 6 days ago
+    return {
+      date: date.toISOString().split('T')[0],
+      day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      revenue: 0,
+      orders: 0
+    };
+  });
+  
+  // Add revenue data for each day
+  if (orders && orders.length > 0) {
+    orders.forEach(order => {
+      const orderDate = new Date(order.created_at).toISOString().split('T')[0];
+      const dayData = last7Days.find(d => d.date === orderDate);
+      
+      if (dayData) {
+        dayData.revenue += Number(order.total_amount);
+        dayData.orders += 1;
+      }
+    });
+  }
+  
+  // NEW: Customer statistics
+  // For demo purposes, let's simulate some customer data
+  // In a real app, you would query the actual customer data
+  const customerIds = orders?.map(order => order.customer_id).filter(Boolean);
+  const uniqueCustomerIds = [...new Set(customerIds)];
+  const totalCustomers = uniqueCustomerIds.length;
+  
+  // Get new customers (from last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  
+  const newCustomersOrders = orders?.filter(order => 
+    new Date(order.created_at) >= thirtyDaysAgo
+  ) || [];
+  
+  const newCustomerIds = [...new Set(newCustomersOrders.map(order => order.customer_id))];
+  const newCustomers = newCustomerIds.length;
+  
+  // Returning customers = total - new
+  const returningCustomers = Math.max(0, totalCustomers - newCustomers);
+  
+  // Growth rate (30-day period)
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(now.getDate() - 60);
+  
+  const previousPeriodOrders = orders?.filter(order => 
+    new Date(order.created_at) >= sixtyDaysAgo && new Date(order.created_at) < thirtyDaysAgo
+  ) || [];
+  
+  const previousPeriodCustomerIds = [...new Set(previousPeriodOrders.map(order => order.customer_id))];
+  const previousPeriodCustomers = previousPeriodCustomerIds.length;
+  
+  const customerGrowthRate = previousPeriodCustomers === 0
+    ? newCustomers > 0 ? 100 : 0
+    : Math.round(((newCustomers - previousPeriodCustomers) / previousPeriodCustomers) * 100);
+    
   return {
     productsCount: productsCount || 0,
     activeProductsCount: activeProductsCount || 0,
@@ -145,7 +253,15 @@ async function getDashboardStats(userId: string) {
     currency,
     recentOrders,
     monthlyOrdersData,
-    comparisonWithLastMonth
+    comparisonWithLastMonth,
+    salesByTemplate,
+    dailyRevenue: last7Days,
+    customerStats: {
+      newCustomers,
+      returningCustomers,
+      totalCustomers,
+      growthRate: customerGrowthRate
+    }
   };
 }
 
@@ -167,301 +283,488 @@ export default async function DashboardPage() {
   const stats = await getDashboardStats(user.id);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-gray-500 mt-2">
-          Welcome back! Here's an overview of your store's performance.
-        </p>
+    <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Welcome section */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back!</h1>
+            <p className="text-gray-600 mt-1">
+              Here's what's happening with your store today.
+            </p>
+          </div>
+          <div className="hidden md:flex space-x-2">
+            <Link 
+              href="/dashboard/products/new" 
+              className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Add New Product
+            </Link>
+            <Link 
+              href="/dashboard/orders" 
+              className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            >
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              View Orders
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* Main stats cards */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <div className="p-6 bg-white rounded-lg shadow-sm border relative overflow-hidden">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-              <h3 className="text-2xl font-bold mt-1">
-                {formatCurrency(stats.totalRevenue, stats.currency)}
-              </h3>
-            </div>
-            <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-green-500"></div>
-        </div>
-        
-        <div className="p-6 bg-white rounded-lg shadow-sm border relative overflow-hidden">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Orders</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.totalOrders}</h3>
-            </div>
-            <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <ShoppingCart className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500"></div>
-        </div>
-        
-        <div className="p-6 bg-white rounded-lg shadow-sm border relative overflow-hidden group">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Pending Orders</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.pendingOrders}</h3>
-            </div>
-            <div className="h-12 w-12 bg-amber-100 rounded-full flex items-center justify-center">
-              <Clock className="h-6 w-6 text-amber-600" />
-            </div>
-          </div>
-          <Link 
-            href="/dashboard/orders?status=pending" 
-            className="absolute inset-0 flex items-end justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <span className="text-sm font-medium text-blue-600 flex items-center">
-              View All <ArrowRight className="ml-1 h-4 w-4" />
-            </span>
-          </Link>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500"></div>
-        </div>
-        
-        <div className="p-6 bg-white rounded-lg shadow-sm border relative overflow-hidden group">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Products</p>
-              <h3 className="text-2xl font-bold mt-1">{stats.productsCount}</h3>
-              <p className="text-xs text-green-600 mt-1">
-                {stats.activeProductsCount} active
-              </p>
-            </div>
-            <div className="h-12 w-12 bg-purple-100 rounded-full flex items-center justify-center">
-              <Package className="h-6 w-6 text-purple-600" />
-            </div>
-          </div>
-          <Link 
-            href="/dashboard/products" 
-            className="absolute inset-0 flex items-end justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <span className="text-sm font-medium text-blue-600 flex items-center">
-              View All <ArrowRight className="ml-1 h-4 w-4" />
-            </span>
-          </Link>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-purple-500"></div>
-        </div>
-      </div>
-      
-      {/* New orders and monthly chart */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-1 bg-white rounded-lg shadow-sm border p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold">New Orders</h3>
+      {/* Overview Stats */}
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-6">
             <div className="flex items-center">
-              <span className={`inline-flex items-center text-sm ${stats.comparisonWithLastMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {stats.comparisonWithLastMonth >= 0 ? <ArrowUp className="h-4 w-4 mr-1" /> : <ArrowDown className="h-4 w-4 mr-1" />}
-                {Math.abs(stats.comparisonWithLastMonth)}%
-              </span>
-              <span className="text-xs text-gray-500 ml-2">vs last month</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center justify-center mb-4">
-            <div className="relative h-36 w-36 rounded-full bg-blue-50 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-8 border-blue-500 opacity-20"></div>
-              <div className="absolute top-0 bottom-0 left-0 right-0 rounded-full border-8 border-transparent border-t-blue-500 border-r-blue-500" style={{ clipPath: 'polygon(50% 0%, 100% 0%, 100% 100%, 50% 100%)', transform: 'rotate(45deg)' }}></div>
-              <div>
-                <p className="text-4xl font-bold text-center">{stats.newOrders}</p>
-                <p className="text-sm text-gray-500 text-center">last 7 days</p>
+              <div className="p-3 bg-indigo-100 rounded-lg">
+                <DollarSign className="h-6 w-6 text-indigo-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Revenue</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                  {formatCurrency(stats.totalRevenue, stats.currency)}
+                </h3>
               </div>
             </div>
+            <div className={`flex items-center mt-4 text-sm ${stats.comparisonWithLastMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {stats.comparisonWithLastMonth >= 0 ? (
+                <ArrowUp className="h-4 w-4 mr-1" />
+              ) : (
+                <ArrowDown className="h-4 w-4 mr-1" />
+              )}
+              <span>{Math.abs(stats.comparisonWithLastMonth)}% from last month</span>
+            </div>
           </div>
-          
-          <Link 
-            href="/dashboard/orders" 
-            className="w-full mt-4 py-2 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium rounded-md flex items-center justify-center transition-colors"
-          >
-            View All Orders
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
         </div>
         
-        <div className="md:col-span-2 bg-white rounded-lg shadow-sm border p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold">Orders Overview</h3>
-            <div className="flex items-center text-sm text-blue-600">
-              <BarChart3 className="h-4 w-4 mr-1" />
-              Monthly Trend
+        <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <ShoppingCart className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Orders</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.totalOrders}</h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                <span className="font-medium text-blue-600">{stats.newOrders}</span> new this week
+              </div>
+              <Link href="/dashboard/orders" className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors flex items-center">
+                View All <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
             </div>
           </div>
-          
-          {stats.monthlyOrdersData.every(data => data.value === 0) ? (
-            <div className="h-64 w-full flex flex-col items-center justify-center text-gray-400">
-              <BarChart3 className="h-16 w-16 mb-2 opacity-30" />
-              <p className="text-center">No order data available yet.</p>
-              <p className="text-center text-sm mt-1">Orders will appear here once customers start placing them.</p>
+        </div>
+        
+        <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-amber-100 rounded-lg">
+                <Clock className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Pending Orders</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.pendingOrders}</h3>
+              </div>
             </div>
-          ) : (
-            <div className="h-64 w-full">
-              <div className="flex h-48 items-end justify-between relative">
-                {/* Y-axis label */}
-                <div className="absolute -left-6 h-full flex flex-col justify-between items-end pointer-events-none">
-                  <span className="text-xs text-gray-400">Orders</span>
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                Needs your attention
+              </div>
+              <Link href="/dashboard/orders?status=pending" className="text-sm font-medium text-amber-600 hover:text-amber-800 transition-colors flex items-center">
+                Process <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <Package className="h-6 w-6 text-purple-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Products</p>
+                <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.productsCount}</h3>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-gray-500">
+                <span className="font-medium text-purple-600">{stats.activeProductsCount}</span> active
+              </div>
+              <Link href="/dashboard/products" className="text-sm font-medium text-purple-600 hover:text-purple-800 transition-colors flex items-center">
+                Manage <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Daily Revenue Chart */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Daily Revenue</h2>
+            <div className="text-sm text-gray-500 flex items-center">
+              <Calendar className="h-4 w-4 mr-1" />
+              Last 7 days
+            </div>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="h-64">
+            {stats.dailyRevenue.every(day => day.revenue === 0) ? (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                <Activity className="h-16 w-16 mb-2 opacity-30" />
+                <p>No revenue data available for this period</p>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col">
+                <div className="flex-1 flex items-end space-x-2">
+                  {stats.dailyRevenue.map((day, index) => {
+                    const maxRevenue = Math.max(...stats.dailyRevenue.map(d => d.revenue));
+                    const heightPercentage = maxRevenue === 0 ? 0 : (day.revenue / maxRevenue) * 100;
+                    
+                    return (
+                      <div key={day.date} className="flex-1 flex flex-col items-center">
+                        <div className="relative w-full group">
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            {formatCurrency(day.revenue, stats.currency)} ({day.orders} orders)
+                          </div>
+                          
+                          {/* Bar */}
+                          <div className="w-full bg-indigo-100 hover:bg-indigo-200 transition-colors rounded-t relative overflow-hidden">
+                            <div 
+                              className="absolute bottom-0 left-0 right-0 bg-indigo-500" 
+                              style={{ 
+                                height: `${heightPercentage}%`,
+                                minHeight: day.revenue > 0 ? '4px' : '0' 
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                        <div className="h-full" style={{ height: `${Math.max(80, 200 - heightPercentage * 2)}px` }}></div>
+                        <div className="text-xs text-gray-500 mt-2 font-medium">{day.day}</div>
+                      </div>
+                    );
+                  })}
                 </div>
-                
-                {/* Chart bars */}
-                {stats.monthlyOrdersData.map((month, index) => {
-                  // Calculate height percentage based on max value
-                  const maxValue = Math.max(...stats.monthlyOrdersData.map(d => d.value), 1);
-                  const heightPercentage = maxValue === 0 ? 0 : (month.value / maxValue) * 100;
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Sales by Template and Customer Stats */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Sales by Product Template */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Sales by Template</h2>
+          </div>
+          <div className="p-6">
+            {stats.salesByTemplate.length === 0 ? (
+              <div className="h-48 flex flex-col items-center justify-center text-gray-400">
+                <PieChart className="h-12 w-12 mb-2 opacity-30" />
+                <p>No sales data available yet</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {stats.salesByTemplate.map((item, index) => {
+                  const totalRevenue = stats.totalRevenue || 1;
+                  const percentage = Math.round((item.revenue / totalRevenue) * 100);
+                  
+                  const colors = {
+                    premium: {
+                      bg: 'bg-purple-100',
+                      text: 'text-purple-800',
+                      bar: 'bg-purple-500',
+                    },
+                    standard: {
+                      bg: 'bg-blue-100',
+                      text: 'text-blue-800',
+                      bar: 'bg-blue-500',
+                    },
+                    minimal: {
+                      bg: 'bg-gray-100',
+                      text: 'text-gray-800',
+                      bar: 'bg-gray-500',
+                    }
+                  };
+                  
+                  // Default to minimal colors if template type is unknown
+                  const templateColors = colors[item.template as keyof typeof colors] || colors.minimal;
                   
                   return (
-                    <div key={index} className="flex flex-col items-center flex-1 mx-1 relative group">
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full mb-1 -translate-y-1 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-xs rounded py-1 px-2 pointer-events-none">
-                        {month.value} order{month.value !== 1 ? 's' : ''}
+                    <div key={item.template} className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <span className={`inline-block h-3 w-3 rounded-full ${templateColors.bar} mr-2`}></span>
+                          <span className="capitalize text-sm font-medium">{item.template}</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {formatCurrency(item.revenue, stats.currency)} ({percentage}%)
+                        </div>
                       </div>
-                      
-                      {/* Bar */}
-                      <div 
-                        className={`w-full bg-blue-500 rounded-t ${month.value > 0 ? 'min-h-[4px]' : ''}`}
-                        style={{ height: `${heightPercentage}%` }}
-                      >
-                        {/* Show value on top of bar for non-zero values */}
-                        {month.value > 0 && (
-                          <div className="text-xs text-white text-center font-medium -mt-5">
-                            {month.value}
-                          </div>
-                        )}
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${templateColors.bar}`} 
+                          style={{ width: `${percentage}%` }}
+                        ></div>
                       </div>
-                      
-                      {/* Month label */}
-                      <div className="mt-2 text-xs text-gray-500">{month.month}</div>
+                      <div className="text-xs text-gray-500">
+                        {item.orders} order{item.orders !== 1 ? 's' : ''}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              
-              {/* X-axis label */}
-              <div className="text-center mt-4">
-                <span className="text-xs text-gray-400">Last 6 Months</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Product stats card */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-semibold">Product Summary</h3>
-          <Link 
-            href="/dashboard/products" 
-            className="text-sm text-blue-600 font-medium flex items-center"
-          >
-            Manage Products
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
-        </div>
-        
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-purple-700 font-medium">{stats.productsCount}</p>
-                <h4 className="text-sm text-gray-500">Total Products</h4>
-              </div>
-              <Package className="h-8 w-8 text-purple-400" />
-            </div>
-          </div>
-          
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-green-700 font-medium">{stats.activeProductsCount}</p>
-                <h4 className="text-sm text-gray-500">Active Products</h4>
-              </div>
-              <Package className="h-8 w-8 text-green-400" />
-            </div>
-          </div>
-          
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-blue-700 font-medium">
-                  {stats.productsCount > 0 
-                    ? `${Math.round((stats.totalOrders / stats.productsCount) * 10) / 10}` 
-                    : '0'}
-                </p>
-                <h4 className="text-sm text-gray-500">Avg. Orders Per Product</h4>
-              </div>
-              <BarChart3 className="h-8 w-8 text-blue-400" />
-            </div>
+            )}
           </div>
         </div>
-      </div>
-      
-      {/* Recent orders */}
-      <div className="bg-white rounded-lg shadow-sm border">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold">Recent Orders</h3>
-        </div>
-        
-        {stats.recentOrders.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-gray-500">No recent orders found.</p>
+  
+        {/* Customer Statistics */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Customer Overview</h2>
           </div>
-        ) : (
-          <div className="divide-y">
-            {stats.recentOrders.map((order: any) => (
-              <Link
-                key={order.id}
-                href={`/dashboard/orders/${order.id}`}
-                className="p-4 flex items-center hover:bg-gray-50"
-              >
-                <div className="flex-1">
-                  <h4 className="font-medium">{order.products.title}</h4>
-                  <p className="text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString()}
-                  </p>
-                </div>
+          <div className="p-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div className="flex items-center">
-                  <div className="mr-4">
-                    <p className="font-medium">
-                      {formatCurrency(order.total_amount, order.products.currency)}
-                    </p>
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <Users className="h-5 w-5 text-green-600" />
                   </div>
-                  <div>
-                    <span 
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                          order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                          order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
-                          order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
-                        }
-                      `}
-                    >
-                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                  <div className="ml-4">
+                    <p className="text-xs font-medium text-gray-500">Total Customers</p>
+                    <h3 className="text-xl font-bold text-gray-900 mt-1">
+                      {stats.customerStats.totalCustomers}
+                    </h3>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs text-gray-500">New</span>
+                    <span className="text-xs font-medium">
+                      {Math.round((stats.customerStats.newCustomers / Math.max(stats.customerStats.totalCustomers, 1)) * 100)}%
                     </span>
                   </div>
-                  <ArrowRight className="ml-2 h-4 w-4 text-gray-400" />
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500"
+                      style={{ 
+                        width: `${Math.round((stats.customerStats.newCustomers / Math.max(stats.customerStats.totalCustomers, 1)) * 100)}%` 
+                      }}
+                    ></div>
+                  </div>
                 </div>
-              </Link>
-            ))}
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-xs text-gray-500">Returning</span>
+                    <span className="text-xs font-medium">
+                      {Math.round((stats.customerStats.returningCustomers / Math.max(stats.customerStats.totalCustomers, 1)) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500"
+                      style={{ 
+                        width: `${Math.round((stats.customerStats.returningCustomers / Math.max(stats.customerStats.totalCustomers, 1)) * 100)}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+  
+              <div className="flex flex-col justify-between">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="text-sm font-medium text-gray-700">Customer Growth</div>
+                  <div className="mt-2 flex items-baseline">
+                    <span className="text-2xl font-bold text-gray-900">
+                      {stats.customerStats.newCustomers}
+                    </span>
+                    <span className="ml-1 text-sm text-gray-500">new (30d)</span>
+                  </div>
+                  <div className={`flex items-center mt-2 text-sm ${
+                    stats.customerStats.growthRate >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {stats.customerStats.growthRate >= 0 ? (
+                      <ArrowUp className="h-3 w-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="h-3 w-3 mr-1" />
+                    )}
+                    <span>
+                      {Math.abs(stats.customerStats.growthRate)}% from previous 30 days
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <Link
+                    href="#"
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors flex items-center"
+                  >
+                    View Customer Analytics <ArrowRight className="ml-1 h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-        
-        {stats.recentOrders.length > 0 && (
-          <div className="p-4 border-t">
+        </div>
+      </div>
+
+      {/* Product View Analytics */}
+      <div className="mt-6">
+        <ProductViewAnalytics className="shadow-sm" />
+      </div>
+
+      {/* Recent Orders and Performance */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent Orders */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm col-span-2">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
+              <Link href="/dashboard/orders" className="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                View all
+              </Link>
+            </div>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {stats.recentOrders.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">
+                No orders yet. Orders will appear here once customers make purchases.
+              </div>
+            ) : (
+              stats.recentOrders.map((order: any) => (
+                <div key={order.id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="sm:flex sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-indigo-600">Order #{order.id.substring(0, 8)}</div>
+                      <div className="flex items-center mt-1">
+                        <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
+                          order.status === 'completed' ? 'bg-green-500' : 
+                          order.status === 'pending' ? 'bg-amber-500' : 
+                          order.status === 'processing' ? 'bg-blue-500' : 'bg-gray-500'
+                        }`}></div>
+                        <p className="text-sm text-gray-500 capitalize">{order.status}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 sm:mt-0">
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatCurrency(order.total_amount, order.products?.currency || stats.currency)}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="mt-2 sm:mt-0">
+                      <Link href={`/dashboard/orders/${order.id}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-800 flex items-center">
+                        Details <ExternalLink className="ml-1 h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Performance Card */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Monthly Performance</h2>
+          </div>
+          <div className="p-6">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-indigo-100 text-indigo-600 mb-4">
+                <TrendingUp className="h-8 w-8" />
+              </div>
+              <div className="text-3xl font-bold text-gray-900">{stats.totalOrders}</div>
+              <div className="text-sm text-gray-500 mt-1">Total Orders</div>
+              <div className={`inline-flex items-center mt-2 text-sm ${
+                stats.comparisonWithLastMonth >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {stats.comparisonWithLastMonth >= 0 ? (
+                  <ArrowUp className="h-4 w-4 mr-1" />
+                ) : (
+                  <ArrowDown className="h-4 w-4 mr-1" />
+                )}
+                <span>{Math.abs(stats.comparisonWithLastMonth)}% from last month</span>
+              </div>
+            </div>
+            
+            <div className="h-48 flex items-end">
+              {stats.monthlyOrdersData.map((month: any, index: number) => (
+                <div key={`${month.month}-${month.year}`} className="flex-1 flex flex-col items-center">
+                  <div className="w-full px-1">
+                    <div 
+                      className="w-full bg-indigo-100 hover:bg-indigo-200 transition-colors rounded-t" 
+                      style={{ height: `${month.value ? (month.value / Math.max(...stats.monthlyOrdersData.map((m: any) => m.value || 1)) * 100) : 0}px`, minHeight: month.value ? '16px' : '0' }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-2">{month.month}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl p-6 text-white shadow-md hover:shadow-lg transition-shadow">
+          <div className="flex flex-col h-full justify-between">
+            <div>
+              <Package className="h-8 w-8 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Add New Product</h3>
+              <p className="text-indigo-100">Create a new product listing to expand your catalog.</p>
+            </div>
             <Link 
-              href="/dashboard/orders" 
-              className="text-sm text-blue-600 font-medium flex items-center"
+              href="/dashboard/products/new" 
+              className="mt-4 inline-flex items-center text-white bg-white/20 px-3 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-medium"
             >
-              View All Orders
-              <ArrowRight className="ml-1 h-4 w-4" />
+              Add Product <ArrowRight className="ml-1 h-4 w-4" />
             </Link>
           </div>
-        )}
+        </div>
+        
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl p-6 text-white shadow-md hover:shadow-lg transition-shadow">
+          <div className="flex flex-col h-full justify-between">
+            <div>
+              <Truck className="h-8 w-8 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Manage Orders</h3>
+              <p className="text-amber-100">Process pending orders and track shipments.</p>
+            </div>
+            <Link 
+              href="/dashboard/orders" 
+              className="mt-4 inline-flex items-center text-white bg-white/20 px-3 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-medium"
+            >
+              Go to Orders <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+        
+        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-6 text-white shadow-md hover:shadow-lg transition-shadow">
+          <div className="flex flex-col h-full justify-between">
+            <div>
+              <Star className="h-8 w-8 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">Store Performance</h3>
+              <p className="text-green-100">View detailed analytics about your store.</p>
+            </div>
+            <Link 
+              href="#" 
+              className="mt-4 inline-flex items-center text-white bg-white/20 px-3 py-2 rounded-lg hover:bg-white/30 transition-colors text-sm font-medium"
+            >
+              View Analytics <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

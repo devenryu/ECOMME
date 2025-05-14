@@ -16,6 +16,7 @@ interface Color {
 
 interface MinimalTemplateProps {
   product: {
+    id: string;
     title: string;
     description: string;
     price: number;

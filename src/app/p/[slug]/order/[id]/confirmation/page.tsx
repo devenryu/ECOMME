@@ -2,8 +2,6 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { CheckCircle } from 'lucide-react';
-import Link from 'next/link';
-import { buttonVariants } from '@/components/ui/button';
 import { cn, formatCurrency } from '@/lib/utils';
 
 interface PageProps {
@@ -113,13 +111,6 @@ export default async function OrderConfirmationPage({ params }: PageProps) {
                 </div>
               </dl>
             </div>
-
-            <Link 
-              href="/" 
-              className={cn(buttonVariants({ variant: "default" }), "font-medium")}
-            >
-              Return Home
-            </Link>
           </div>
         </div>
       </div>

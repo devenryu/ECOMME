@@ -16,6 +16,7 @@ interface Color {
 
 interface StandardTemplateProps {
   product: {
+    id: string;
     title: string;
     description: string;
     price: number;
@@ -42,11 +43,28 @@ export function StandardTemplate({ product }: StandardTemplateProps)  {
   const [orderQuantity, setOrderQuantity] = useState<number>(product.min_order_quantity || 1);
   const [productQuantity, setProductQuantity] = useState<number>(product.quantity || 0);
 
+  console.log("StandardTemplate - Product:", product.title);
+  console.log("StandardTemplate - Colors:", product.colors);
+
   // Update product quantity and order quantity when product data changes
   useEffect(() => {
     setProductQuantity(product.quantity || 0);
     setOrderQuantity(product.min_order_quantity || 1);
   }, [product]);
+
+  useEffect(() => {
+    // If colors are available, select the first one by default
+    if (Array.isArray(product.colors) && product.colors.length > 0) {
+      const firstColor = product.colors[0];
+      setSelectedColor(firstColor.id || `color-${firstColor.hex_code}`);
+      console.log("StandardTemplate - Auto-selected color:", firstColor.name);
+    }
+    
+    // If sizes are available, select the first one by default
+    if (Array.isArray(product.sizes) && product.sizes.length > 0) {
+      setSelectedSize(product.sizes[0]);
+    }
+  }, [product.colors, product.sizes]);
 
   const handleQuantityChange = (newQuantity: number) => {
     // Ensure quantity is within bounds
@@ -127,6 +145,9 @@ export function StandardTemplate({ product }: StandardTemplateProps)  {
             <div className="space-y-6">
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{product.title}</h1>
+                <div className="flex items-center mt-2">
+                  {/* ViewCounter component would be here */}
+                </div>
                 <p className="mt-4 text-muted-foreground text-lg leading-relaxed">{product.description}</p>
               </div>
               
@@ -149,23 +170,26 @@ export function StandardTemplate({ product }: StandardTemplateProps)  {
                 <div className="space-y-3">
                   <h3 className="font-medium">Color</h3>
                   <div className="flex space-x-2">
-                    {product.colors.map((color) => (
-                      <button
-                        key={color.id || `color-${color.hex_code}`}
-                        className={`w-8 h-8 rounded-full border-2 border-white ring-1 ring-border focus:outline-none focus:ring-primary transition-colors ${selectedColor === (color.id || `color-${color.hex_code}`) ? 'ring-2 ring-primary' : 'hover:ring-primary'}`}
-                        style={{ backgroundColor: color.hex_code }}
-                        aria-label={`Select color ${color.name}`}
-                        title={color.name}
-                        tabIndex={0}
-                        onClick={() => setSelectedColor(color.id || `color-${color.hex_code}`)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ' ') setSelectedColor(color.id || `color-${color.hex_code}`);
-                        }}
-                        aria-pressed={selectedColor === (color.id || `color-${color.hex_code}`)}
-                      >
-                        <span className="sr-only">{color.name}</span>
-                      </button>
-                    ))}
+                    {product.colors.map((color) => {
+                      console.log("Rendering color:", color);
+                      return (
+                        <button
+                          key={color.id || `color-${color.hex_code}`}
+                          className={`w-8 h-8 rounded-full border-2 border-white ring-1 ring-border focus:outline-none focus:ring-primary transition-colors ${selectedColor === (color.id || `color-${color.hex_code}`) ? 'ring-2 ring-primary' : 'hover:ring-primary'}`}
+                          style={{ backgroundColor: color.hex_code }}
+                          aria-label={`Select color ${color.name}`}
+                          title={color.name}
+                          tabIndex={0}
+                          onClick={() => setSelectedColor(color.id || `color-${color.hex_code}`)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') setSelectedColor(color.id || `color-${color.hex_code}`);
+                          }}
+                          aria-pressed={selectedColor === (color.id || `color-${color.hex_code}`)}
+                        >
+                          <span className="sr-only">{color.name}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                   {selectedColor && (
                     <div className="text-sm text-gray-600">
@@ -304,11 +328,16 @@ export function StandardTemplate({ product }: StandardTemplateProps)  {
           <div className="mt-16 border-t border-border pt-8">
             <div className="flex border-b border-border">
               <button className="px-6 py-3 font-medium text-primary border-b-2 border-primary">Description</button>
+              <button className="px-6 py-3 font-medium text-muted-foreground hover:text-foreground">Stats</button>
             </div>
             <div className="py-6">
               <p className="text-muted-foreground leading-relaxed">
                 {product.description}
               </p>
+              
+              <div className="mt-6 flex flex-wrap gap-6">
+                {/* ViewCounter component would be here */}
+              </div>
             </div>
           </div>
         </div>

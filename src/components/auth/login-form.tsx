@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { loginSchema } from "@/lib/validations/auth";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
@@ -14,9 +14,18 @@ type FormData = z.infer<typeof loginSchema>;
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirectPath, setRedirectPath] = useState('/dashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClientComponentClient();
+
+  // Handle redirect param in a useEffect to avoid direct searchParams access during SSR
+  useEffect(() => {
+    const redirect = searchParams.get('redirect');
+    if (redirect) {
+      setRedirectPath(redirect);
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -40,9 +49,8 @@ export function LoginForm() {
         throw error;
       }
 
-      // Redirect to the original destination or dashboard
-      const redirectTo = searchParams.get('redirect') || '/dashboard';
-      router.push(redirectTo);
+      // Use the state variable instead of directly accessing searchParams
+      router.push(redirectPath);
       router.refresh();
     } catch (error) {
       console.error('Login error:', error);

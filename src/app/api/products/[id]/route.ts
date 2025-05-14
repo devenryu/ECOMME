@@ -64,6 +64,14 @@ export async function PATCH(
     // Extract colors to handle separately
     const colorsData = body.colors || [];
     const { colors, ...restBody } = body;
+    
+    // Define color interface
+    interface ProductColor {
+      id: string;
+      name: string;
+      hex_code: string;
+      custom?: boolean;
+    }
 
     // Prepare update data - only include fields that can be updated
     const { title, description, price, currency, status, template_type, image_url, features, sizes, images } = restBody;
@@ -81,6 +89,7 @@ export async function PATCH(
       sizes?: string[];
       images?: string[];
       slug?: string;
+      colors?: string[];
     } = {
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
@@ -93,6 +102,14 @@ export async function PATCH(
       ...(sizes !== undefined && { sizes }),
       ...(images !== undefined && { images }),
     };
+
+    // Add colors if they were provided in the request
+    if (colors !== undefined) {
+      const colorHexCodes = colorsData && colorsData.length > 0
+        ? colorsData.map((color: ProductColor) => color.hex_code)
+        : [];
+      updateData.colors = colorHexCodes;
+    }
     
     // Only regenerate slug if title has changed
     if (title && title !== existingProduct.title) {
@@ -123,6 +140,8 @@ export async function PATCH(
 
     // Update colors if they were provided
     if (colors !== undefined) {
+      console.log(`[API] Updating colors for product ${params.id}, ${colorsData.length} colors provided`);
+      
       // First, delete existing colors
       const { error: deleteError } = await supabase
         .from('product_colors')
@@ -133,11 +152,13 @@ export async function PATCH(
         console.error(`[API] Error deleting existing colors for product ${params.id}:`, deleteError);
       } else if (colorsData.length > 0) {
         // Then insert new colors
-        const productColors = colorsData.map((color: any) => ({
+        const productColors = colorsData.map((color: ProductColor) => ({
           product_id: params.id,
-          color_id: color.custom ? null : color.id,
+          color_id: color.id,
           custom_hex_code: color.custom ? color.hex_code : null
         }));
+        
+        console.log(`[API] Inserting ${productColors.length} colors for product ${params.id}:`, productColors);
 
         const { error: insertError } = await supabase
           .from('product_colors')
@@ -145,6 +166,8 @@ export async function PATCH(
 
         if (insertError) {
           console.error(`[API] Error inserting new colors for product ${params.id}:`, insertError);
+        } else {
+          console.log(`[API] Successfully inserted ${productColors.length} colors for product ${params.id}`);
         }
       }
     }

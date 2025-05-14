@@ -50,9 +50,34 @@ export async function GET(
       console.log(`[PUBLIC API] Product not found in admin check`);
     }
 
+    // Define a product type that includes colors
+    interface ProductWithColors {
+      id: string;
+      title: string;
+      description: string;
+      price: number;
+      currency: string;
+      template_type: string;
+      image_url: string;
+      features: any[];
+      slug: string;
+      status: string;
+      images: string[];
+      sizes: string[];
+      quantity: number;
+      min_order_quantity: number;
+      max_order_quantity: number | null;
+      colors?: Array<{
+        id: string;
+        name: string;
+        hex_code: string;
+        custom?: boolean;
+      }>;
+    }
+
     // Fetch product data
     console.log(`[PUBLIC API] Fetching public product data for slug: ${params.slug}`);
-    const { data: product, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .select(`
         id,
@@ -69,7 +94,8 @@ export async function GET(
         sizes,
         quantity,
         min_order_quantity,
-        max_order_quantity
+        max_order_quantity,
+        colors
       `)
       .eq('slug', params.slug)
       .eq('status', 'active')  // Explicitly filter for active products
@@ -108,15 +134,29 @@ export async function GET(
       );
     }
 
-    if (!product) {
+    if (!data) {
       console.log(`[PUBLIC API] Product with slug '${params.slug}' not found`);
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       );
     }
+    
+    // Cast the data to our product type
+    const product = data as unknown as ProductWithColors;
+
+    // Define proper types for color data
+    interface ColorObject {
+      id: string;
+      name: string;
+      hex_code: string;
+      custom?: boolean;
+    }
+
+    let formattedColors: ColorObject[] = [];
 
     // Fetch product colors from relationship table
+    console.log(`[PUBLIC API] Fetching colors for product ID: ${product.id}`);
     const { data: productColors, error: colorsError } = await supabase
       .from('product_colors')
       .select(`
@@ -127,10 +167,12 @@ export async function GET(
       `)
       .eq('product_id', product.id);
 
+    console.log(`[PUBLIC API] Product colors data:`, productColors);
+
     if (colorsError) {
       console.error(`[PUBLIC API] Error fetching product colors: ${colorsError.message}`);
-    } else {
-      // Define proper types for color data
+    } else if (productColors && productColors.length > 0) {
+      // Define types for database objects
       interface StandardColor {
         id: string;
         name: string;
@@ -139,25 +181,90 @@ export async function GET(
       
       interface ProductColor {
         id: string;
-        color_id: string | null;
-        custom_hex_code: string | null;
-        standard_colors: StandardColor | null;
+        color_id: string;
+        custom_hex_code?: string | null;
+        standard_colors?: StandardColor | null;
       }
-      
+
       // Format colors to a consistent structure
-      const formattedColors = (productColors as ProductColor[]).map(item => ({
+      formattedColors = productColors.map((item: any) => ({
         id: item.color_id || item.id,
         name: item.standard_colors?.name || 'Custom',
-        hex_code: item.custom_hex_code || item.standard_colors?.hex_code,
+        hex_code: item.custom_hex_code || item.standard_colors?.hex_code || '#000000', // Provide fallback color
         custom: !!item.custom_hex_code
       }));
       
-      // Add colors to the product using type assertion
-      (product as any).colors = formattedColors;
+      console.log(`[PUBLIC API] Formatted colors from product_colors table:`, formattedColors);
+    } else {
+      // Check if the product has colors directly in its data
+      console.log(`[PUBLIC API] Checking product.colors:`, product.colors);
+      
+      if (product.colors && Array.isArray(product.colors) && product.colors.length > 0) {
+        console.log(`[PUBLIC API] Using colors from product.colors field (text[] of hex codes):`, product.colors);
+        
+        // Get standard colors to look up names
+        const { data: standardColors, error: standardColorsError } = await supabase
+          .from('standard_colors')
+          .select('id, name, hex_code');
+          
+        if (standardColorsError) {
+          console.error(`[PUBLIC API] Error fetching standard colors:`, standardColorsError);
+        }
+        
+        formattedColors = [];
+        
+        // Process each color in the array
+        for (const colorItem of product.colors) {
+          if (typeof colorItem === 'string' && /^#[0-9A-Fa-f]{6}$/.test(colorItem)) {
+            // It's a hex code string
+            const hex: string = colorItem;
+            const matchingStandardColor = standardColors?.find(sc => 
+              sc.hex_code.toLowerCase() === hex.toLowerCase()
+            );
+            
+            if (matchingStandardColor) {
+              formattedColors.push({
+                id: matchingStandardColor.id,
+                name: matchingStandardColor.name,
+                hex_code: matchingStandardColor.hex_code,
+                custom: false
+              });
+            } else {
+              formattedColors.push({
+                id: `color-${hex}`,
+                name: 'Custom',
+                hex_code: hex,
+                custom: true
+              });
+            }
+          } else if (typeof colorItem === 'object' && colorItem !== null && 'hex_code' in colorItem) {
+            // It's a legacy color object
+            try {
+              formattedColors.push({
+                id: colorItem.id || `color-${colorItem.hex_code}`,
+                name: colorItem.name || 'Unknown',
+                hex_code: colorItem.hex_code || '#000000',
+                custom: colorItem.custom || false
+              });
+            } catch (error) {
+              console.error(`[PUBLIC API] Error processing legacy color format:`, error);
+            }
+          }
+        }
+        
+        console.log(`[PUBLIC API] Processed ${formattedColors.length} colors from product.colors`);
+      } else {
+        console.log(`[PUBLIC API] No colors found in product_colors table or product.colors for product ${product.id}`);
+        formattedColors = [];
+      }
     }
 
-    console.log(`[PUBLIC API] Successfully fetched product: ${product.title}`);
-    return NextResponse.json(product);
+    // Return the product with colors
+    console.log(`[PUBLIC API] Returning product ${product.title} with ${formattedColors.length} colors`);
+    return NextResponse.json({
+      ...product,
+      colors: formattedColors
+    });
   } catch (error) {
     console.error(`[PUBLIC API] Unexpected error for slug '${params.slug}':`, error);
     return NextResponse.json(
